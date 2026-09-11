@@ -40,6 +40,19 @@
   .header h1 { margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; }
   .mode-badge { background: rgba(59,130,246,0.3); color: #93c5fd; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid rgba(59,130,246,0.6); user-select: none; }
 
+  /* Status row: weekday/weekend badge + who's online (inline, never overlaps) */
+  .status-row { display: flex; align-items: stretch; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .status-row .daymode { flex: 1 1 200px; margin-bottom: 0; }
+  .online-chip { flex: 0 1 auto; display: flex; align-items: center; gap: 2px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.45); border-radius: 12px; padding: 8px 12px; font-size: 12px; font-weight: 600; color: #6ee7b7; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .online-chip:active { opacity: 0.75; }
+
+  /* Weekday / weekend indicator */
+  .daymode { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-radius: 12px; margin-bottom: 14px; font-size: 13px; font-weight: 700; letter-spacing: 0.3px; border: 1px solid transparent; }
+  .daymode .sub { font-weight: 500; font-size: 12px; opacity: 0.85; text-align: right; }
+  .daymode.wk { background: rgba(168,85,247,0.18); border-color: rgba(168,85,247,0.5); color: #e9d5ff; }
+  .daymode.wd { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.35); color: #bfdbfe; }
+  .daymode.off { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); color: #a0aec0; }
+
   /* Shift Dashboard */
   .block-dash { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.5); border-radius: 16px; padding: 16px; margin-bottom: 20px; display: none; }
   .block-title { color: #93c5fd; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
@@ -214,6 +227,7 @@
   .sync-dot.connected { background:#10b981; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/bwip-js@4/dist/bwip-js-min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
@@ -231,12 +245,6 @@
   </div>
 </div>
 
-<!-- Active users indicator -->
-<div id="activeUsers" style="display:none;position:fixed;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:100;background:rgba(16,185,129,0.3);border:1px solid rgba(16,185,129,0.6);border-radius:12px;padding:6px 14px;font-size:13px;font-weight:600;color:#6ee7b7;box-shadow:0 2px 10px rgba(16,185,129,0.3);cursor:pointer;" onclick="openUsersPanel()">
-  <span id="syncDot" class="sync-dot"></span>
-  <span id="activeUsersText">Online</span>
-</div>
-
 <div class="container">
   <div class="header">
     <div style="display:flex;align-items:center;gap:10px;">
@@ -245,6 +253,14 @@
       <button id="editBtn" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
     </div>
     <div id="modeBtn" class="mode-badge">Mode: Full Day</div>
+  </div>
+
+  <div class="status-row">
+    <div id="dayModeBadge" class="daymode wd"><span>Weekday</span><span class="sub"></span></div>
+    <div id="activeUsers" class="online-chip" style="display:none;" onclick="openUsersPanel()">
+      <span id="syncDot" class="sync-dot"></span>
+      <span id="activeUsersText">Online</span>
+    </div>
   </div>
 
   <div id="blockDash" class="block-dash">
@@ -256,6 +272,7 @@
     <div class="progress-bg">
       <div id="blockProgressBar" class="progress-fill"></div>
     </div>
+    <div id="dashTeam" style="margin-top:8px;font-size:12px;color:#a0aec0;"></div>
   </div>
 
   <div id="activeCard" class="active-card">
@@ -266,6 +283,7 @@
       <canvas id="barcodeCanvas" style="display:none;"></canvas>
       <div id="barcodePlaceholder" class="barcode-placeholder">No barcode</div>
     </div>
+    <div id="cardMeta" style="height:16px;margin-top:8px;font-size:11px;color:#a0aec0;visibility:hidden;"></div>
   </div>
 
   <button id="nextBtn" class="btn btn-next">Generate Next Number</button>
@@ -326,6 +344,7 @@
       <button id="editBackBtn" class="panel-btn" style="display:none;">&larr;</button>
       <h2 id="editTitle" style="color:#93c5fd;">Edit</h2>
     </div>
+    <button id="editUndoBtn" class="panel-btn" style="display:none;background:rgba(245,158,11,0.18);color:#fcd34d;border:1px solid rgba(245,158,11,0.4);">&#8630; Undo</button>
     <button id="editClose" class="panel-btn">Close</button>
   </div>
   <div class="panel-body"><div id="editContent" class="panel-inner"></div></div>
@@ -419,6 +438,16 @@
     <div id="usersList" style="max-height:400px;overflow-y:auto;"></div>
   </div>
 </div>
+<!-- Camera Barcode Scanner Modal -->
+<div id="scanModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:6600;justify-content:center;align-items:center;">
+  <div style="background:#1e212b;border-radius:20px;padding:18px;width:92%;max-width:420px;border:1px solid rgba(255,255,255,0.1);">
+    <div id="scanTitle" style="color:#fff;font-size:16px;font-weight:700;text-align:center;margin-bottom:6px;">Scan barcode</div>
+    <div id="scanStatus" style="color:#a0aec0;font-size:12px;text-align:center;margin-bottom:10px;">Point the camera at the product's barcode</div>
+    <div id="scanRegion" style="width:100%;border-radius:12px;overflow:hidden;background:#000;min-height:220px;"></div>
+    <button id="scanCancel" style="width:100%;margin-top:12px;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>
+  </div>
+</div>
+
 <!-- Copy Backup (chunked) Modal -->
 <div id="backupModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:6500;justify-content:center;align-items:center;">
   <div style="background:#1e212b;border-radius:20px;padding:22px;width:92%;max-width:400px;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;max-height:88vh;">
@@ -444,6 +473,7 @@
       <canvas id="modalCanvas" style="width:100%;display:block;"></canvas>
     </div>
     <div id="modalNoBarcode" style="display:none;color:#a0aec0;font-size:14px;padding:20px 0;">No barcode on file for this product yet.</div>
+    <button id="modalEditList" style="width:100%;border:none;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.18);color:#93c5fd;border:1px solid rgba(59,130,246,0.4);margin-bottom:8px;">Edit this list</button>
     <button id="modalClose" style="width:100%;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#ffffff;">Close</button>
   </div>
 </div>
@@ -674,6 +704,13 @@ function headerTheme(color) {
   return { bg: rgbaStr(color, 0.20), text: lum < 0.55 ? lightenHex(color, 0.45) : color, border: rgbaStr(color, 0.4) };
 }
 
+// A stable, pleasant color per user name (for log tags / users panel)
+function userColor(name) {
+  var h = 0; name = String(name || "");
+  for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return "hsl(" + (h % 360) + ", 70%, 68%)";
+}
+
 function colorOfFamily(famName) {
   var fams = (state && state.families) || DEFAULT_FAMILIES;
   for (var i = 0; i < fams.length; i++) if (fams[i].name === famName) return fams[i].color;
@@ -815,6 +852,27 @@ function setActivePos(st, cat, wk, v) {
   if (wk) st.wpos[cat] = v; else st.pos[cat] = v;
 }
 
+// Human-readable state of the weekend window + time until it flips
+function weekendSwitchInfo(now) {
+  var w = weekendCfg();
+  now = now || new Date();
+  if (!w.enabled) return { enabled: false, wk: false, title: "Weekend mode off", sub: "Every day runs the weekday lists" };
+  var wk = isWeekendNow(state, now);
+  var cur   = now.getDay() * 1440 + now.getHours() * 60 + now.getMinutes();
+  var start = w.startDay * 1440 + w.startHour * 60;
+  var end   = w.endDay   * 1440 + w.endHour   * 60;
+  var target = wk ? end : start;
+  var mins = ((target - cur) % 10080 + 10080) % 10080;
+  var h = Math.floor(mins / 60), m = mins % 60;
+  var inTxt = h >= 24 ? (Math.floor(h / 24) + "d " + (h % 24) + "h") : (h + "h " + m + "m");
+  return {
+    enabled: true, wk: wk,
+    title: wk ? "\u{1F319} Weekend mode" : "\u2600\uFE0F Weekday mode",
+    sub: wk ? ("until " + DAY_NAMES[w.endDay] + " " + fmtHour(w.endHour) + " \u00b7 " + inTxt + " left")
+            : ("weekend starts " + DAY_NAMES[w.startDay] + " " + fmtHour(w.startHour) + " \u00b7 in " + inTxt)
+  };
+}
+
 function daysetOf(cat, st) {
   var map = ((st || state) && (st || state).dayOf) || {};
   var v = map[cat];
@@ -889,7 +947,7 @@ function bootstrap() {
     families: state.families, familyOf: state.familyOf, modes: state.modes,
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
-    wnums: state.wnums, wpos: state.wpos,
+    wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
     rev: state.rev
   });
   state.pos = norm.pos; state.hist = norm.hist; state.mode = norm.mode;
@@ -898,7 +956,7 @@ function bootstrap() {
   state.cartonNums = norm.cartonNums; state.cartonUpcs = norm.cartonUpcs; state.cartonOrder = norm.cartonOrder;
   state.autoResetDate = norm.autoResetDate;
   state.dayOf = norm.dayOf; state.weekend = norm.weekend;
-  state.wnums = norm.wnums; state.wpos = norm.wpos;
+  state.wnums = norm.wnums; state.wpos = norm.wpos; state.cartonDone = norm.cartonDone;
   state.rev = norm.rev || 0;
   syncRefs();
   if (state.ptr === undefined || state.ptr === null || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
@@ -1013,6 +1071,15 @@ function normalizeShared(st) {
 
   if (!st.autoResetDate) st.autoResetDate = localDateStr();
 
+  // Carton "done" checks: { cartonCat: { index: userName } }
+  if (!st.cartonDone || typeof st.cartonDone !== "object") st.cartonDone = {};
+  Object.keys(st.cartonDone).forEach(function(c){
+    if (st.cartonOrder.indexOf(c) === -1) { delete st.cartonDone[c]; return; }
+    var len = (st.cartonNums[c] || []).length, clean = {};
+    Object.keys(st.cartonDone[c] || {}).forEach(function(i){ var n = parseInt(i, 10); if (n >= 0 && n < len) clean[n] = st.cartonDone[c][i] || "\u2713"; });
+    st.cartonDone[c] = clean;
+  });
+
   // Weekend config (must be settled before weekend lists are normalized below)
   var w = st.weekend || {};
   st.weekend = {
@@ -1055,7 +1122,7 @@ function sharedSnapshot() {
     families: state.families, familyOf: state.familyOf, modes: state.modes,
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
-    wnums: state.wnums, wpos: state.wpos,
+    wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
     rev: state.rev || 0
   }));
 }
@@ -1068,7 +1135,11 @@ function encodeShared(st) {
     families: st.families.map(function(f){ return { name: f.name, color: f.color }; }),
     modes: st.modes.map(function(m){ return { id: m.id, name: m.name, color: m.color, open: m.open, close: m.close, shifts: m.shifts }; }),
     catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", day: st.dayOf[n] || "always", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
-    cartons: st.cartonOrder.map(function(n){ return { name: n, upc: st.cartonUpcs[n] || "", nums: st.cartonNums[n] || [] }; })
+    cartons: st.cartonOrder.map(function(n){
+      var d = (st.cartonDone && st.cartonDone[n]) || {};
+      return { name: n, upc: st.cartonUpcs[n] || "", nums: st.cartonNums[n] || [],
+               done: Object.keys(d).map(function(i){ return { i: parseInt(i, 10), u: d[i] }; }) };
+    })
   };
 }
 
@@ -1076,7 +1147,7 @@ function decodeShared(remote) {
   if (!remote) return null;
   var st = { mode: remote.mode || "blocks", hist: toList(remote.hist), rev: remote.rev || 0,
              autoResetDate: remote.autoResetDate || "",
-             weekend: remote.weekend || null, dayOf: {}, wnums: {}, wpos: {},
+             weekend: remote.weekend || null, dayOf: {}, wnums: {}, wpos: {}, cartonDone: {},
              pos: {}, nums: {}, upcs: {}, order: [], families: [], familyOf: {}, modes: [],
              cartonNums: {}, cartonUpcs: {}, cartonOrder: [] };
   st.families = toList(remote.families).filter(function(f){ return f && f.name; }).map(function(f){ return { name: f.name, color: f.color || "#64748b" }; });
@@ -1098,6 +1169,9 @@ function decodeShared(remote) {
       st.cartonOrder.push(e.name);
       st.cartonNums[e.name] = toList(e.nums);
       if (e.upc) st.cartonUpcs[e.name] = e.upc;
+      var dm = {};
+      toList(e.done).forEach(function(x){ if (x && typeof x.i === "number") dm[x.i] = x.u || "\u2713"; });
+      st.cartonDone[e.name] = dm;
     });
     if (!st.order.length) { st.nums = null; st.upcs = null; st.order = null; }
     if (!st.cartonOrder.length) { st.cartonNums = null; st.cartonUpcs = null; st.cartonOrder = null; }
@@ -1123,20 +1197,51 @@ function applyShared(stMap) {
   state.cartonNums = stMap.cartonNums; state.cartonUpcs = stMap.cartonUpcs; state.cartonOrder = stMap.cartonOrder;
   state.autoResetDate = stMap.autoResetDate;
   state.dayOf = stMap.dayOf; state.weekend = stMap.weekend;
-  state.wnums = stMap.wnums; state.wpos = stMap.wpos;
+  state.wnums = stMap.wnums; state.wpos = stMap.wpos; state.cartonDone = stMap.cartonDone;
   state.rev  = stMap.rev || 0;
   syncRefs();
   if (wasAtEnd || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
   save();
   refreshUI();
   if (isEditorOpen()) renderEditor();
+  var sp = document.getElementById("specialPanel");
+  if (sp && sp.style.display === "flex") buildCartonsPanel();
+}
+
+// ---- Edit undo ---------------------------------------------------------------
+// Any editor mutation that calls markUndo("label") first gets a snapshot of the
+// editable structures taken right BEFORE it commits. "Undo Edit" restores the
+// most recent snapshot. Kept device-local (like the shuffle undo) so it never
+// bloats the synced payload. Up to 10 steps.
+var EDIT_UNDO_MAX = 10;
+var _pendingUndoLabel = null;
+function markUndo(label) { _pendingUndoLabel = label || "Edit"; }
+
+function snapshotEditable(st) {
+  return JSON.parse(JSON.stringify({
+    nums: st.nums, wnums: st.wnums, upcs: st.upcs, order: st.order,
+    familyOf: st.familyOf, dayOf: st.dayOf, families: st.families,
+    cartonNums: st.cartonNums, cartonUpcs: st.cartonUpcs, cartonOrder: st.cartonOrder,
+    cartonDone: st.cartonDone || {},
+    modes: st.modes, weekend: st.weekend,
+    pos: st.pos, wpos: st.wpos
+  }));
+}
+function pushEditUndo(label, pre, histLen) {
+  if (!state.editUndo) state.editUndo = [];
+  state.editUndo.push({ label: label, ts: Date.now(), histLen: histLen, data: pre });
+  while (state.editUndo.length > EDIT_UNDO_MAX) state.editUndo.shift();
+  save();
 }
 
 function mutateShared(mutator, onDone) {
+  var undoLabel = _pendingUndoLabel; _pendingUndoLabel = null;
+  var lastPre = null, lastHistLen = 0;
   if (db && syncEnabled) {
     try {
       db.ref("state").transaction(function(remote) {
         var working = remote ? decodeShared(remote) : normalizeShared(sharedSnapshot());
+        if (undoLabel) { lastPre = snapshotEditable(working); lastHistLen = working.hist.length; }
         var result = mutator(working);
         if (result === false) return; // abort, no change
         working.rev = (working.rev || 0) + 1;
@@ -1144,6 +1249,7 @@ function mutateShared(mutator, onDone) {
       }, function(error, committed, snapshot) {
         if (error) { showToast("Sync error - saved locally"); fallbackLocal(); return; }
         if (committed && snapshot) applyShared(decodeShared(snapshot.val()));
+        if (committed && undoLabel && lastPre) pushEditUndo(undoLabel, lastPre, lastHistLen);
         if (onDone) onDone(committed);
       });
       return;
@@ -1153,12 +1259,40 @@ function mutateShared(mutator, onDone) {
 
   function fallbackLocal() {
     var working = normalizeShared(sharedSnapshot());
+    if (undoLabel) { lastPre = snapshotEditable(working); lastHistLen = working.hist.length; }
     var result = mutator(working);
     if (result === false) { if (onDone) onDone(false); return; }
     working.rev = (working.rev || 0) + 1;
     applyShared(working);
+    if (undoLabel && lastPre) pushEditUndo(undoLabel, lastPre, lastHistLen);
     if (onDone) onDone(true);
   }
+}
+
+// Restore the most recent edit snapshot. Progress counters are only restored if
+// no calls were generated since (otherwise they're left alone and clamped).
+function editUndoLast() {
+  var stack = state.editUndo || [];
+  if (!stack.length) { showToast("Nothing to undo"); return; }
+  var snap = stack[stack.length - 1];
+  mutateShared(function(st) {
+    var d = snap.data;
+    st.nums = d.nums; st.wnums = d.wnums; st.upcs = d.upcs; st.order = d.order;
+    st.familyOf = d.familyOf; st.dayOf = d.dayOf; st.families = d.families;
+    st.cartonNums = d.cartonNums; st.cartonUpcs = d.cartonUpcs; st.cartonOrder = d.cartonOrder;
+    st.cartonDone = d.cartonDone || {};
+    st.modes = d.modes; st.weekend = d.weekend;
+    if (st.hist.length === snap.histLen) { st.pos = d.pos; st.wpos = d.wpos; }
+    return st;
+  }, function(c) {
+    if (c) {
+      stack.pop(); save();
+      // if the thing we restored no longer exists in the editor view, go back to the list
+      if (editorBrand && (liveOrder(editorSection) || []).indexOf(editorBrand) === -1) editorBrand = null;
+      renderEditor();
+      showToast("Undid: " + snap.label);
+    }
+  });
 }
 
 // ---- Core actions -----------------------------------------------------------
@@ -1248,7 +1382,28 @@ function refreshUI() {
 
   modeBtn.textContent = "Mode: " + modeDefOf(state.mode).name;
 
+  // Weekday / weekend badge
+  var dmb = document.getElementById("dayModeBadge");
+  if (dmb) {
+    var wsi = weekendSwitchInfo();
+    dmb.className = "daymode " + (!wsi.enabled ? "off" : (wsi.wk ? "wk" : "wd"));
+    dmb.innerHTML = "<span>" + wsi.title + "</span><span class='sub'>" + escapeHtml(wsi.sub) + "</span>";
+  }
+
   var sinfo = shiftInfo(state.mode, state);
+  // Today's calls, by person (multi-user at-a-glance)
+  var dt = document.getElementById("dashTeam");
+  if (dt) {
+    var today = localDateStr(), byUser = {}, tot = 0;
+    (state.hist || []).forEach(function(e){
+      if (!e.ts || localDateStr(new Date(e.ts)) !== today) return;
+      tot++; var u = e.user || "?"; byUser[u] = (byUser[u] || 0) + 1;
+    });
+    var parts = Object.keys(byUser).sort(function(a,b){ return byUser[b] - byUser[a]; }).slice(0, 4).map(function(u){
+      return "<span style='color:" + userColor(u) + ";font-weight:700;'>" + escapeHtml(u) + "</span> " + byUser[u];
+    });
+    dt.innerHTML = tot ? ("Today: <b style='color:#fff;'>" + tot + "</b> \u00b7 " + parts.join(" \u00b7 ")) : "No calls yet today";
+  }
   if (sinfo.gated) {
     dash.style.display = "block";
     chipLabel.textContent = "(All-Time)";
@@ -1334,6 +1489,12 @@ function refreshUI() {
       if (dialHint) { dialHint.style.visibility = "visible"; dialHint.style.color = ct.hint; }
     }
     try { updateBarcode(h.set); } catch(e) {}
+    var cm = document.getElementById("cardMeta");
+    if (cm) {
+      var t = h.ts ? new Date(h.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
+      cm.innerHTML = (h.user ? "<span style='color:" + userColor(h.user) + ";font-weight:700;'>" + escapeHtml(h.user) + "</span>" : "") + (t ? " \u00b7 " + t : "") + (h.wk ? " \u00b7 weekend pool" : "");
+      cm.style.color = ct.hint; cm.style.visibility = "visible";
+    }
     document.title = h.set;
   } else {
     var card0 = document.getElementById("activeCard");
@@ -1348,6 +1509,8 @@ function refreshUI() {
     phoneEl.onclick = null;
     var dialHint2 = document.getElementById("dialHint");
     if (dialHint2) dialHint2.style.visibility = "hidden";
+    var cm0 = document.getElementById("cardMeta");
+    if (cm0) cm0.style.visibility = "hidden";
     updateBarcode(null);
     document.title = "Sequencer";
   }
@@ -1456,7 +1619,7 @@ function refreshUI() {
       row.style.paddingLeft = "8px";
       var isCurrent = (li === state.ptr);
       var timeStr = x.ts ? new Date(x.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
-      var userTag = x.user ? "<span style='color:#60a5fa;font-size:11px;flex-shrink:0;'>" + escapeHtml(x.user) + "</span>" : "";
+      var userTag = x.user ? "<span style='color:" + userColor(x.user) + ";font-size:11px;flex-shrink:0;font-weight:700;'>" + escapeHtml(x.user) + "</span>" : "";
       row.innerHTML = "<span class='log-brand'>" + (isCurrent ? "&gt; " : "") + escapeHtml(x.set) + "</span>" +
         "<span class='log-num'>" + escapeHtml(x.num) + "</span>" +
         userTag +
@@ -1620,6 +1783,7 @@ document.getElementById("resetBtn").onclick = function() {
     mutateShared(function(st) {
       st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
       st.hist = [];
+      st.cartonDone = {};
       return st;
     }, function() {
       state.ptr = -1;
@@ -1738,6 +1902,7 @@ document.getElementById("importLabel").addEventListener("click", function(e) {
         st.weekend = imported.weekend;
         st.wnums = imported.wnums;
         st.wpos = imported.wpos;
+        st.cartonDone = imported.cartonDone;
         st.cartonNums = imported.cartonNums;
         st.cartonUpcs = imported.cartonUpcs;
         st.cartonOrder = imported.cartonOrder;
@@ -1774,6 +1939,7 @@ function checkAutoReset() {
     if (st.autoResetDate === today) return false; // another device already reset for today
     st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
     st.hist = [];
+    st.cartonDone = {};
     st.autoResetDate = today;
     return st;
   }, function(committed) {
@@ -1804,6 +1970,7 @@ function openChipModal(brandName) {
   var noBarcode = document.getElementById("modalNoBarcode");
 
   title.textContent = brandName;
+  _chipModalBrand = brandName;
   var upc = UPCS[brandName];
   var ok = upc ? drawBarcode(canvas, upc) : null;
 
@@ -1822,6 +1989,14 @@ function openChipModal(brandName) {
 
 document.getElementById("modalClose").onclick = function() {
   document.getElementById("modalOverlay").style.display = "none";
+};
+var _chipModalBrand = null;
+document.getElementById("modalEditList").onclick = function() {
+  var b = _chipModalBrand;
+  document.getElementById("modalOverlay").style.display = "none";
+  if (!b) return;
+  var go = function(){ editorUnlocked = true; editorSection = "calls"; openEditor(); editorBrand = b; editorListKind = "main"; renderEditor(); };
+  if (editorUnlocked) go(); else promptPasscode("Required to edit " + b, go);
 };
 document.getElementById("modalOverlay").onclick = function(e) {
   if (e.target === this) this.style.display = "none";
@@ -2045,7 +2220,7 @@ function refreshUsersPanel() {
       row.innerHTML =
         "<div style='width:10px;height:10px;border-radius:50%;background:" + (isOnline ? "#10b981" : "#4a5568") + ";margin-right:12px;flex-shrink:0;'></div>" +
         "<div style='flex:1;'>" +
-          "<div style='color:#fff;font-size:14px;font-weight:600;'>" + escapeHtml(u.name) + (isMe ? " <span style='color:#60a5fa;font-size:11px;'>(you)</span>" : "") + "</div>" +
+          "<div style='color:" + userColor(u.name) + ";font-size:14px;font-weight:700;'>" + escapeHtml(u.name) + (isMe ? " <span style='color:#a0aec0;font-size:11px;font-weight:400;'>(you)</span>" : "") + "</div>" +
           "<div style='color:#a0aec0;font-size:12px;'>" + (isOnline ? "Online now" : "Last seen " + lastSeen) + "</div>" +
         "</div>" +
         "<div style='text-align:right;'>" +
@@ -2066,6 +2241,21 @@ document.getElementById("usersPanel").onclick = function(e) {
 
 
 // ---- Cartons Directory Logic ------------------------------------------------
+// Tick / untick a carton number as done (synced; shows who ticked it)
+function cartonToggle(cat, idx, num) {
+  mutateShared(function(st) {
+    var arr = st.cartonNums[cat];
+    if (!arr || arr[idx] !== num) return false;
+    if (!st.cartonDone[cat]) st.cartonDone[cat] = {};
+    if (st.cartonDone[cat][idx]) delete st.cartonDone[cat][idx];
+    else st.cartonDone[cat][idx] = currentUser || "\u2713";
+    return st;
+  }, function(c){ if (c) buildCartonsPanel(); });
+}
+function cartonClearChecks() {
+  mutateShared(function(st){ st.cartonDone = {}; return st; }, function(c){ if (c) { buildCartonsPanel(); showToast("Carton checks cleared"); } });
+}
+
 function buildCartonsPanel() {
   var el = document.getElementById("specialContent");
   el.innerHTML = "";
@@ -2073,14 +2263,32 @@ function buildCartonsPanel() {
     el.innerHTML = "<div style='color:#a0aec0;font-size:14px;padding:8px 0;'>No carton categories yet. Add them in the Edit panel.</div>";
     return;
   }
+  var doneMap = state.cartonDone || {};
+  var totalAll = 0, doneAll = 0;
+  CARTON_ORDER.forEach(function(c){ totalAll += (CARTONS[c] || []).length; doneAll += Object.keys(doneMap[c] || {}).length; });
+
+  var top = document.createElement("div");
+  top.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;";
+  top.innerHTML = "<div style='color:#a0aec0;font-size:13px;'>Tap the box to tick a carton as done \u00b7 <b style='color:#fff;'>" + doneAll + "/" + totalAll + "</b> done</div>";
+  var clr = document.createElement("button");
+  clr.className = "tool-btn";
+  clr.style.flex = "0 0 auto";
+  clr.textContent = "Clear checks";
+  clr.disabled = !doneAll;
+  clr.onclick = cartonClearChecks;
+  top.appendChild(clr);
+  el.appendChild(top);
+
   CARTON_ORDER.forEach(function(cat) {
     var nums = CARTONS[cat] || [];
+    var dm = doneMap[cat] || {};
     var section = document.createElement("div");
     section.style.cssText = "background:#1e212b;border-radius:16px;padding:16px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.1);";
 
     var title = document.createElement("div");
-    title.style.cssText = "font-size:15px;font-weight:700;color:#fcd34d;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;";
-    title.textContent = cat;
+    title.style.cssText = "display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:700;color:#fcd34d;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;";
+    var dn = Object.keys(dm).length;
+    title.innerHTML = "<span>" + escapeHtml(cat) + "</span><span style='font-size:12px;font-weight:600;color:" + (dn === nums.length && nums.length ? "#6ee7b7" : "#a0aec0") + ";'>" + dn + "/" + nums.length + "</span>";
     section.appendChild(title);
 
     if (!nums.length) {
@@ -2090,12 +2298,30 @@ function buildCartonsPanel() {
       section.appendChild(hint);
     }
 
-    nums.forEach(function(num) {
+    nums.forEach(function(num, idx) {
+      var who = dm[idx];
       var row = document.createElement("div");
-      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.07);";
-      row.innerHTML = "<span style='color:#fff;font-size:16px;font-weight:600;font-family:ui-monospace,monospace;'>" + escapeHtml(num) + "</span>" +
-        "<span style='color:#fcd34d;font-size:12px;'>Barcode</span>";
-      row.onclick = (function(c, n){ return function(){ openCartonBarcode(c, n); }; })(cat, num);
+      row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 10px;background:" + (who ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.05)") + ";border-radius:10px;margin-bottom:8px;border:1px solid " + (who ? "rgba(16,185,129,0.45)" : "rgba(255,255,255,0.07)") + ";";
+
+      var box = document.createElement("div");
+      box.className = "sel-box" + (who ? " on" : "");
+      box.style.borderColor = who ? "#10b981" : "rgba(255,255,255,0.3)";
+      box.style.background = who ? "#10b981" : "";
+      box.innerHTML = who ? "&#10003;" : "";
+      box.onclick = (function(c, i, n){ return function(e){ e.stopPropagation(); cartonToggle(c, i, n); }; })(cat, idx, num);
+
+      var txt = document.createElement("div");
+      txt.style.cssText = "flex:1;min-width:0;cursor:pointer;";
+      txt.innerHTML = "<div style='color:" + (who ? "#a7f3d0" : "#fff") + ";font-size:16px;font-weight:600;font-family:ui-monospace,monospace;" + (who ? "text-decoration:line-through;opacity:0.85;" : "") + "'>" + escapeHtml(num) + "</div>" +
+        (who ? "<div style='font-size:11px;color:#6ee7b7;'>done by " + escapeHtml(who) + "</div>" : "");
+      txt.onclick = (function(c, n){ return function(){ openCartonBarcode(c, n); }; })(cat, num);
+
+      var bc = document.createElement("span");
+      bc.style.cssText = "color:#fcd34d;font-size:12px;flex-shrink:0;cursor:pointer;";
+      bc.textContent = "Barcode";
+      bc.onclick = (function(c, n){ return function(){ openCartonBarcode(c, n); }; })(cat, num);
+
+      row.appendChild(box); row.appendChild(txt); row.appendChild(bc);
       section.appendChild(row);
     });
 
@@ -2300,6 +2526,7 @@ function promptChoice(title, items, cb) {
 
 // -- Day tagging + weekend window mutations (synced) --
 function catSetDayset(cat, ds) {
+  markUndo("Change active days");
   mutateShared(function(st) {
     if (st.order.indexOf(cat) === -1) return false;
     st.dayOf[cat] = (ds === "weekday" || ds === "weekend") ? ds : "always";
@@ -2337,6 +2564,7 @@ var DAYSET_COLORS = { always: "#64748b", weekday: "#3b82f6", weekend: "#a855f7" 
 
 // -- Family mutations (synced) --
 function familyAdd(rawName, color, cb) {
+  markUndo("Add family");
   var name = String(rawName || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 30);
   if (!name) { showToast("Invalid family name"); if (cb) cb(null); return; }
   mutateShared(function(st) {
@@ -2353,6 +2581,7 @@ function familyAdd(rawName, color, cb) {
 }
 
 function familySetColor(name, color) {
+  markUndo("Recolor family");
   mutateShared(function(st) {
     var f = st.families.filter(function(x){ return x.name === name; })[0];
     if (!f) return false;
@@ -2362,6 +2591,7 @@ function familySetColor(name, color) {
 }
 
 function familyRename(oldName, rawNew) {
+  markUndo("Rename family");
   var name = String(rawNew || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 30);
   if (!name) { showToast("Invalid family name"); return; }
   if (oldName === "Other") { showToast("The Other family can't be renamed"); return; }
@@ -2377,6 +2607,7 @@ function familyRename(oldName, rawNew) {
 }
 
 function familyDelete(name) {
+  markUndo("Delete family");
   if (name === "Other") { showToast("The Other family can't be deleted"); return; }
   mutateShared(function(st) {
     var used = Object.keys(st.familyOf).some(function(cat){ return st.familyOf[cat] === name; });
@@ -2387,6 +2618,7 @@ function familyDelete(name) {
 }
 
 function familyMove(name, dir) {
+  markUndo("Reorder family");
   mutateShared(function(st) {
     var i = -1;
     st.families.forEach(function(f, k){ if (f.name === name) i = k; });
@@ -2401,6 +2633,7 @@ function familyMove(name, dir) {
 }
 
 function catSetFamily(cat, famName) {
+  markUndo("Change family");
   mutateShared(function(st) {
     if (st.order.indexOf(cat) === -1) return false;
     if (!st.families.some(function(f){ return f.name === famName; })) return false;
@@ -2410,6 +2643,7 @@ function catSetFamily(cat, famName) {
 }
 
 function catRename(sec, oldName, rawNew) {
+  markUndo("Rename category");
   var name = String(rawNew || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 40);
   if (!name) { showToast("Invalid name"); return; }
   mutateShared(function(st) {
@@ -2518,6 +2752,7 @@ function promptInput(title, initial, cb, inputType) {
 
 // -- Editor mutations (all synced through Firebase transactions) --
 function numAdd(sec, brand, text, randomize) {
+  markUndo("Add number");
   var formatted = formatPhone(text);
   if (!formatted) return;
   mutateShared(function(st) {
@@ -2537,6 +2772,7 @@ function numAdd(sec, brand, text, randomize) {
 }
 
 function numEdit(sec, brand, idx, expected, text) {
+  markUndo("Edit number");
   var formatted = formatPhone(text);
   if (!formatted) return;
   mutateShared(function(st) {
@@ -2548,6 +2784,7 @@ function numEdit(sec, brand, idx, expected, text) {
 }
 
 function numDelete(sec, brand, idx, expected) {
+  markUndo("Delete number");
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr || idx >= arr.length || arr[idx] !== expected) return false;
@@ -2561,6 +2798,7 @@ function numDelete(sec, brand, idx, expected) {
 }
 
 function numMove(sec, brand, idx, dir, expected) {
+  markUndo("Move number");
   var j = idx + dir;
   var p = sec === "calls" ? (state.pos[brand] || 0) : 0;
   if (j < 0 || j >= liveNums(sec)[brand].length) return;
@@ -2579,6 +2817,7 @@ function numMove(sec, brand, idx, dir, expected) {
 }
 
 function upcSet(sec, brand, text) {
+  markUndo("Change barcode");
   var digits = String(text || "").replace(/\D/g, "");
   if (digits.length < 6 || digits.length > 14) {
     showToast("Barcode must be 6-14 digits");
@@ -2602,6 +2841,7 @@ function upcSet(sec, brand, text) {
 }
 
 function upcClear(sec, brand) {
+  markUndo("Remove barcode");
   mutateShared(function(st) {
     var upcs = secUpcs(st, sec);
     if (!upcs[brand]) return false;
@@ -2613,6 +2853,7 @@ function upcClear(sec, brand) {
 }
 
 function catAdd(sec, rawName, family) {
+  markUndo("Add category");
   var name = String(rawName || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 40);
   if (!name) { showToast("Invalid category name"); return; }
   mutateShared(function(st) {
@@ -2641,6 +2882,7 @@ function catAdd(sec, rawName, family) {
 }
 
 function catDelete(sec, name) {
+  markUndo("Delete category");
   mutateShared(function(st) {
     var order = secOrder(st, sec);
     var ix = order.indexOf(name);
@@ -2664,6 +2906,7 @@ function catDelete(sec, name) {
 // called-line rule applies, and the value is verified so a concurrent sync
 // can't move the wrong number.
 function numMoveTo(sec, brand, from, to, expected) {
+  markUndo("Reorder number");
   if (from === to) return;
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
@@ -2680,6 +2923,7 @@ function numMoveTo(sec, brand, from, to, expected) {
 // Gentle shuffle: 2-3 adjacent swaps among the PENDING numbers only - a small
 // nudge to the sequence, not a full reshuffle. Called numbers never move.
 function numShuffle(sec, brand) {
+  markUndo("Shuffle list");
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr) return false;
@@ -2789,6 +3033,7 @@ function shuffleUndoLast() {
 
 // Paste-in a whole group of numbers at once
 function numAddBulk(sec, brand, text, randomize) {
+  markUndo("Bulk add");
   var parts = String(text || "").split(/[\n,;]+/).map(function(x){ return formatPhone(x); }).filter(function(x){ return x; });
   if (!parts.length) { showToast("No numbers found"); return; }
   mutateShared(function(st) {
@@ -2811,6 +3056,7 @@ function numAddBulk(sec, brand, text, randomize) {
 
 // Delete several numbers in one go (from Select mode)
 function numDeleteBulk(sec, brand, picks) {
+  markUndo("Bulk delete");
   // picks: [{idx, val}] - each value verified before anything is removed
   var idxs = picks.map(function(p){ return p.idx; }).sort(function(a,b){ return b - a; });
   mutateShared(function(st) {
@@ -2861,6 +3107,54 @@ function promptBulk(title, cb) {
   document.getElementById("bulkModalCancel").onclick = function() { modal.style.display = "none"; };
 }
 
+// -- Camera barcode scanner (html5-qrcode; HTTPS + user tap required) --
+var _scanner = null;
+function stopScanner() {
+  var sc = _scanner; _scanner = null;
+  document.getElementById("scanModal").style.display = "none";
+  if (sc) { try { sc.stop().then(function(){ try { sc.clear(); } catch(e){} }).catch(function(){}); } catch(e) {} }
+}
+function openScanner(title, cb) {
+  if (typeof Html5Qrcode === "undefined") { showToast("Scanner not loaded - check your connection"); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast("This browser can't use the camera here"); return; }
+  var modal = document.getElementById("scanModal");
+  document.getElementById("scanTitle").textContent = title || "Scan barcode";
+  document.getElementById("scanStatus").textContent = "Starting camera\u2026";
+  document.getElementById("scanRegion").innerHTML = "";
+  modal.style.display = "flex";
+  var fmts = [];
+  try {
+    var F = Html5QrcodeSupportedFormats;
+    fmts = [F.UPC_A, F.UPC_E, F.EAN_13, F.EAN_8, F.CODE_128, F.ITF, F.QR_CODE];
+  } catch(e) {}
+  var done = false;
+  var sc;
+  try {
+    sc = new Html5Qrcode("scanRegion", fmts.length ? { formatsToSupport: fmts } : undefined);
+  } catch(e) { showToast("Couldn't start scanner"); modal.style.display = "none"; return; }
+  _scanner = sc;
+  sc.start({ facingMode: "environment" },
+    { fps: 10, qrbox: function(w, h){ return { width: Math.round(w * 0.85), height: Math.round(Math.min(h * 0.5, 180)) }; }, aspectRatio: 1.333 },
+    function(text) {
+      if (done) return; done = true;
+      var digits = String(text || "").replace(/\D/g, "");
+      document.getElementById("scanStatus").textContent = "Got it: " + (digits || text);
+      try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
+      setTimeout(function(){ stopScanner(); cb(digits || text); }, 250);
+    },
+    function(){ /* per-frame miss - ignore */ }
+  ).then(function(){
+    document.getElementById("scanStatus").textContent = "Point the camera at the barcode - hold steady";
+  }).catch(function(err) {
+    var msg = String(err && (err.message || err) || "");
+    document.getElementById("scanStatus").textContent = /NotAllowed|Permission|denied/i.test(msg)
+      ? "Camera permission denied - allow it in Safari settings and try again"
+      : ("Camera error: " + (msg || "unknown"));
+  });
+}
+document.getElementById("scanCancel").onclick = stopScanner;
+document.getElementById("scanModal").onclick = function(e){ if (e.target === this) stopScanner(); };
+
 // -- Touch/mouse drag-to-reorder (handle-based so it never fights scrolling) --
 function attachDrag(handle, row, idx, num, sec, brand, p, len) {
   function start(startY, moveEvt, endEvt, getY) {
@@ -2908,6 +3202,13 @@ function renderEditor() {
   var back    = document.getElementById("editBackBtn");
   var footer  = document.getElementById("editFooter");
   if (!content) return;
+  var ub = document.getElementById("editUndoBtn");
+  if (ub) {
+    var un = (state.editUndo || []).length;
+    ub.style.display = un ? "inline-block" : "none";
+    ub.innerHTML = "&#8630; Undo" + (un ? " (" + un + ")" : "");
+    ub.title = un ? ("Undo: " + state.editUndo[un - 1].label) : "";
+  }
   content.innerHTML = "";
   footer.style.display = "none";
 
@@ -3007,6 +3308,25 @@ function renderEditor() {
       var q = editorSearch.trim().toLowerCase();
       var order = liveOrder(sec);
 
+      // "+ New Category"
+      var addRow = document.createElement("div");
+      addRow.className = "edit-brand-row edit-add-cat";
+      addRow.textContent = "+ New " + (sec === "cartons" ? "Carton" : "Call") + " Category";
+      addRow.onclick = function() {
+        promptInput("New " + (sec === "cartons" ? "carton" : "call") + " category name", "", function(v) {
+          if (sec === "calls") {
+            // Then choose which family it belongs to (or make a new one)
+            promptFamily("Put \"" + v + "\" in which family?", function(fam) {
+              catAdd(sec, v, fam);
+            });
+          } else {
+            catAdd(sec, v);
+          }
+        }, "text");
+      };
+      listWrap.appendChild(addRow);   // at the TOP - easy to reach
+
+
       if (sec === "calls") {
         // Group categories under family headers, in family order
         var any = false;
@@ -3035,23 +3355,6 @@ function renderEditor() {
         if (!any2 && q) listWrap.innerHTML = "<div style='color:#a0aec0;font-size:13px;padding:8px 0;'>No matching categories.</div>";
       }
 
-      // "+ New Category"
-      var addRow = document.createElement("div");
-      addRow.className = "edit-brand-row edit-add-cat";
-      addRow.textContent = "+ New " + (sec === "cartons" ? "Carton" : "Call") + " Category";
-      addRow.onclick = function() {
-        promptInput("New " + (sec === "cartons" ? "carton" : "call") + " category name", "", function(v) {
-          if (sec === "calls") {
-            // Then choose which family it belongs to (or make a new one)
-            promptFamily("Put \"" + v + "\" in which family?", function(fam) {
-              catAdd(sec, v, fam);
-            });
-          } else {
-            catAdd(sec, v);
-          }
-        }, "text");
-      };
-      listWrap.appendChild(addRow);
     }
     search.oninput = function() { editorSearch = search.value; renderRows(); };
     renderRows();
@@ -3125,7 +3428,19 @@ function renderEditor() {
   upcEditBtn.onclick = function() {
     promptInput("Barcode for " + brand, upc || "", function(v) { upcSet(sec2, brand, v); });
   };
+  var upcScanBtn = document.createElement("button");
+  upcScanBtn.className = "edit-mini-btn";
+  upcScanBtn.style.width = "auto";
+  upcScanBtn.style.padding = "0 12px";
+  upcScanBtn.style.background = "rgba(59,130,246,0.2)";
+  upcScanBtn.style.borderColor = "rgba(59,130,246,0.45)";
+  upcScanBtn.style.color = "#93c5fd";
+  upcScanBtn.innerHTML = "&#128247; Scan";
+  upcScanBtn.onclick = function() {
+    openScanner("Scan barcode for " + brand, function(code) { upcSet(sec2, brand, code); });
+  };
   upcCard.appendChild(upcInfo);
+  upcCard.appendChild(upcScanBtn);
   upcCard.appendChild(upcEditBtn);
   if (upc) {
     var upcDelBtn = document.createElement("button");
@@ -3798,6 +4113,7 @@ document.getElementById("editBtn").onclick = function() {
     openEditor();
   });
 };
+document.getElementById("editUndoBtn").onclick = function() { editUndoLast(); };
 document.getElementById("editClose").onclick = function() {
   document.getElementById("editPanel").style.display = "none";
   editorUnlocked = false;   // re-lock when leaving the editor
