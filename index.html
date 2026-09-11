@@ -40,6 +40,48 @@
   .header h1 { margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; }
   .mode-badge { background: rgba(59,130,246,0.3); color: #93c5fd; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid rgba(59,130,246,0.6); user-select: none; }
 
+  /* ---- Motion: small, cheap, GPU-friendly. Disabled if the phone asks for
+     reduced motion, and never animates layout properties (only transform/opacity). */
+  @keyframes seqPop { 0% { transform: scale(0.97); opacity: 0.35; } 60% { transform: scale(1.012); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes seqFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes seqRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes seqSlideUp { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes seqPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .active-card { will-change: transform; }
+  .active-card.pop { animation: seqPop 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .phone-number { transition: color 200ms ease; }
+  .chip { transition: transform 140ms ease, opacity 200ms ease, border-color 200ms ease; }
+  .chip:active { transform: scale(0.96); }
+  .btn { transition: transform 120ms ease, background 200ms ease, box-shadow 200ms ease, opacity 160ms ease; }
+  .btn:active:not(:disabled) { transform: scale(0.975); }
+  .tool-btn, .settings-btn, .panel-btn, .edit-mini-btn { transition: transform 110ms ease, background 180ms ease, opacity 160ms ease; }
+  .tool-btn:active:not(:disabled), .settings-btn:active, .panel-btn:active, .edit-mini-btn:active:not(:disabled) { transform: scale(0.95); }
+  .edit-brand-row, .fam-row { transition: transform 120ms ease, background 180ms ease, border-color 180ms ease; }
+  .edit-brand-row:active, .fam-row:active { transform: scale(0.99); }
+  .progress-fill { transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1), background 250ms ease; }
+  .app-panel[style*="flex"] .panel-body > .panel-inner { animation: seqRise 220ms ease both; }
+  .daymode, .online-chip { transition: background 250ms ease, border-color 250ms ease, color 250ms ease; }
+  .sync-dot { transition: background 300ms ease; }
+  .sync-dot:not(.connected) { animation: seqPulse 1.8s ease-in-out infinite; }
+  #modalOverlay[style*="flex"] > div, #specialBarcodeModal[style*="flex"] > div,
+  #inputModal[style*="flex"] > div, #bulkModal[style*="flex"] > div,
+  #colorModal[style*="flex"] > div, #familyPicker[style*="flex"] > div,
+  #modePicker[style*="flex"] > div, #scanModal[style*="flex"] > div,
+  #backupModal[style*="flex"] > div, #usersPanel[style*="flex"] > div { animation: seqSlideUp 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  #_toast { animation: seqRise 180ms ease both; }
+  .edit-num-row { transition: transform 120ms ease, background 180ms ease, border-color 180ms ease, opacity 180ms ease; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* Product pictures */
+  .prod-img { width: 74px; height: 74px; border-radius: 14px; object-fit: cover; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); flex-shrink: 0; animation: seqFade 240ms ease both; }
+  .chip-img { width: 26px; height: 26px; border-radius: 7px; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.07); }
+  .row-img { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.07); }
+  .chip { gap: 8px; }
+
   /* Status row: weekday/weekend badge + who's online (inline, never overlaps) */
   .status-row { display: flex; align-items: stretch; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .status-row .daymode { flex: 1 1 200px; margin-bottom: 0; }
@@ -237,11 +279,15 @@
 <div id="loginScreen" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:#0f111a;z-index:5000;justify-content:center;align-items:center;">
   <div style="background:#1e212b;border-radius:20px;padding:32px 24px;width:88%;max-width:340px;text-align:center;border:1px solid rgba(255,255,255,0.1);">
     <div style="font-size:28px;font-weight:800;color:#fff;margin-bottom:6px;">Sequencer</div>
-    <div style="font-size:14px;color:#a0aec0;margin-bottom:24px;">Enter your name to continue</div>
-    <input id="usernameInput" type="text" placeholder="Your name" maxlength="20"
-      style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:16px;color:#fff;text-align:center;outline:none;box-sizing:border-box;margin-bottom:12px;">
-    <button id="loginBtn" style="width:100%;background:#3b82f6;border:none;border-radius:12px;padding:14px;font-size:17px;font-weight:600;color:#fff;cursor:pointer;">Enter</button>
-    <div id="loginError" style="color:#ef4444;font-size:13px;margin-top:8px;height:16px;"></div>
+    <div style="font-size:14px;color:#a0aec0;margin-bottom:18px;">Sign in to continue</div>
+    <div id="loginUserChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:14px;"></div>
+    <input id="usernameInput" type="text" placeholder="Username" maxlength="20" autocapitalize="none" autocorrect="off"
+      style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:16px;color:#fff;text-align:center;outline:none;box-sizing:border-box;margin-bottom:10px;">
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="4-digit password"
+      style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:18px;color:#fff;text-align:center;letter-spacing:6px;outline:none;box-sizing:border-box;margin-bottom:12px;">
+    <button id="loginBtn" style="width:100%;background:#3b82f6;border:none;border-radius:12px;padding:14px;font-size:17px;font-weight:600;color:#fff;cursor:pointer;">Sign in</button>
+    <div id="loginError" style="color:#ef4444;font-size:13px;margin-top:8px;min-height:16px;"></div>
+    <div style="color:#64748b;font-size:11px;margin-top:10px;">You'll stay signed in on this device.</div>
   </div>
 </div>
 
@@ -276,6 +322,7 @@
   </div>
 
   <div id="activeCard" class="active-card">
+    <div id="cardImgWrap" style="height:0;overflow:hidden;transition:height 200ms ease;"><img id="cardImg" class="prod-img" alt="" style="display:none;margin:0 auto 8px;" /></div>
     <div id="brandLabel" class="brand-label">Ready to start</div>
     <div id="phoneNumber" class="phone-number">-</div>
     <div id="dialHint" style="visibility:hidden;font-size:11px;color:#a0aec0;margin-bottom:2px;">Tap number to dial</div>
@@ -321,6 +368,7 @@
       Import Backup
     </label>
     <input type="file" id="importFile" accept=".json" />
+    <input type="file" id="imgFile" accept="image/*" style="display:none;" />
     <button id="resetBtn" class="danger-text">Reset All Progress</button>
   </div>
 
@@ -432,7 +480,7 @@
 <div id="usersPanel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;justify-content:center;align-items:center;">
   <div style="background:#1e212b;border-radius:20px;padding:24px;width:88%;max-width:360px;border:1px solid rgba(255,255,255,0.1);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <div style="color:#fff;font-size:17px;font-weight:700;">Users</div>
+      <div style="color:#fff;font-size:17px;font-weight:700;">Staff</div>
       <button id="usersPanelClose" style="background:rgba(255,255,255,0.1);border:none;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;">Close</button>
     </div>
     <div id="usersList" style="max-height:400px;overflow-y:auto;"></div>
@@ -467,6 +515,7 @@
 <!-- Barcode Modal -->
 <div id="modalOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;justify-content:center;align-items:center;">
   <div style="background:#1e212b;border-radius:20px;padding:24px;width:88%;max-width:360px;text-align:center;border:1px solid rgba(255,255,255,0.1);">
+    <img id="chipModalImg" class="prod-img" alt="" style="display:none;margin:0 auto 10px;width:96px;height:96px;" />
     <div id="modalTitle" style="font-size:15px;font-weight:700;color:#ffffff;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;"></div>
     <div id="modalSubtitle" style="font-size:12px;color:#a0aec0;margin-bottom:14px;"></div>
     <div id="modalBarcodeWrap" style="background:#ffffff;border-radius:12px;padding:14px 10px 8px;margin-bottom:14px;">
@@ -989,6 +1038,7 @@ function bootstrap() {
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
+    accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
     rev: state.rev
   });
   state.pos = norm.pos; state.hist = norm.hist; state.mode = norm.mode;
@@ -998,6 +1048,7 @@ function bootstrap() {
   state.autoResetDate = norm.autoResetDate;
   state.dayOf = norm.dayOf; state.weekend = norm.weekend;
   state.wnums = norm.wnums; state.wpos = norm.wpos; state.cartonDone = norm.cartonDone;
+  state.accounts = norm.accounts; state.masterPin = norm.masterPin; state.requireLogin = norm.requireLogin;
   state.rev = norm.rev || 0;
   syncRefs();
   if (state.ptr === undefined || state.ptr === null || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
@@ -1112,6 +1163,20 @@ function normalizeShared(st) {
 
   if (!st.autoResetDate) st.autoResetDate = localDateStr();
 
+  // Accounts: [{ name, pin, role }] - role "master" can manage everyone.
+  // masterPin gates the Edit panel / Reset and is changeable by the master.
+  st.accounts = toList(st.accounts).filter(function(a){ return a && a.name; }).map(function(a){
+    return { name: String(a.name).slice(0, 20), pin: String(a.pin == null ? "" : a.pin).slice(0, 8), role: a.role === "master" ? "master" : "user" };
+  });
+  // First run: create the operator account. Everyone signs in from here on.
+  if (!st.accounts.length) {
+    st.accounts = [{ name: "sen", pin: "1212", role: "master" }];
+    st.masterPin = "1212";
+  }
+  if (!st.masterPin) st.masterPin = "1212";
+  if (!st.accounts.some(function(a){ return a.role === "master"; })) st.accounts[0].role = "master";
+  st.requireLogin = true;   // CRM style: an account is always required
+
   // Carton "done" checks: { cartonCat: { index: userName } }
   if (!st.cartonDone || typeof st.cartonDone !== "object") st.cartonDone = {};
   Object.keys(st.cartonDone).forEach(function(c){
@@ -1164,6 +1229,7 @@ function sharedSnapshot() {
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
+    accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
     rev: state.rev || 0
   }));
 }
@@ -1173,6 +1239,7 @@ function encodeShared(st) {
     mode: st.mode, hist: st.hist, rev: st.rev || 0,
     autoResetDate: st.autoResetDate || "",
     weekend: st.weekend,
+    accounts: st.accounts || [], masterPin: st.masterPin || "1234", requireLogin: !!st.requireLogin,
     families: st.families.map(function(f){ return { name: f.name, color: f.color }; }),
     modes: st.modes.map(function(m){ return { id: m.id, name: m.name, color: m.color, open: m.open, close: m.close, shifts: m.shifts }; }),
     catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", day: st.dayOf[n] || "always", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
@@ -1189,6 +1256,7 @@ function decodeShared(remote) {
   var st = { mode: remote.mode || "blocks", hist: toList(remote.hist), rev: remote.rev || 0,
              autoResetDate: remote.autoResetDate || "",
              weekend: remote.weekend || null, dayOf: {}, wnums: {}, wpos: {}, cartonDone: {},
+             accounts: toList(remote.accounts), masterPin: remote.masterPin || "1234", requireLogin: remote.requireLogin === true,
              pos: {}, nums: {}, upcs: {}, order: [], families: [], familyOf: {}, modes: [],
              cartonNums: {}, cartonUpcs: {}, cartonOrder: [] };
   st.families = toList(remote.families).filter(function(f){ return f && f.name; }).map(function(f){ return { name: f.name, color: f.color || "#64748b" }; });
@@ -1239,12 +1307,14 @@ function applyShared(stMap) {
   state.autoResetDate = stMap.autoResetDate;
   state.dayOf = stMap.dayOf; state.weekend = stMap.weekend;
   state.wnums = stMap.wnums; state.wpos = stMap.wpos; state.cartonDone = stMap.cartonDone;
+  state.accounts = stMap.accounts; state.masterPin = stMap.masterPin; state.requireLogin = stMap.requireLogin;
   state.rev  = stMap.rev || 0;
   syncRefs();
   if (wasAtEnd || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
   save();
   refreshUI();
   if (isEditorOpen()) renderEditor();
+  if (!currentUser) { renderLoginChips(); tryAutoLogin(); }
   var sp = document.getElementById("specialPanel");
   if (sp && sp.style.display === "flex") buildCartonsPanel();
 }
@@ -1505,6 +1575,13 @@ function refreshUI() {
   if (h) {
     brandEl.textContent = h.set;
     var card = document.getElementById("activeCard");
+    var sig = h.set + "|" + h.num + "|" + (h.ts || "");
+    if (card._sig !== sig) {
+      card._sig = sig;
+      card.classList.remove("pop");
+      void card.offsetWidth;          // restart the animation
+      card.classList.add("pop");
+    }
     var ct = cardTheme(familyColor(h.set));
     card.className = "active-card";
     card.style.background = ct.bg;
@@ -1529,6 +1606,12 @@ function refreshUI() {
       }; })(h.num);
       if (dialHint) { dialHint.style.visibility = "visible"; dialHint.style.color = ct.hint; }
     }
+    var ci = document.getElementById("cardImg"), ciw = document.getElementById("cardImgWrap");
+    var src = imgOf(h.set);
+    if (ci && ciw) {
+      if (src) { ci.src = src; ci.style.display = "block"; ciw.style.height = "82px"; }
+      else { ci.removeAttribute("src"); ci.style.display = "none"; ciw.style.height = "0"; }
+    }
     try { updateBarcode(h.set); } catch(e) {}
     var cm = document.getElementById("cardMeta");
     if (cm) {
@@ -1552,6 +1635,8 @@ function refreshUI() {
     if (dialHint2) dialHint2.style.visibility = "hidden";
     var cm0 = document.getElementById("cardMeta");
     if (cm0) cm0.style.visibility = "hidden";
+    var ci0 = document.getElementById("cardImg"), ciw0 = document.getElementById("cardImgWrap");
+    if (ci0 && ciw0) { ci0.style.display = "none"; ciw0.style.height = "0"; }
     updateBarcode(null);
     document.title = "Sequencer";
   }
@@ -1606,7 +1691,9 @@ function refreshUI() {
       chip.className = "chip" + (isDone ? " done" : "");
       chip.style.borderLeft = "3px solid " + color;
       var safeS = escapeHtml(s);
-      chip.innerHTML = "<strong title=\"" + safeS + "\">" + safeS + "</strong><span>" + current + "/" + total + "</span>";
+      var timg = imgOf(s);
+      chip.innerHTML = (timg ? "<img class='chip-img' src='" + escapeHtml(timg) + "' alt='' />" : "") +
+        "<strong title=\"" + safeS + "\">" + safeS + "</strong><span>" + current + "/" + total + "</span>";
       chip.onclick = (function(brand){ return function(){ try { openChipModal(brand); } catch(e) {} }; })(s);
       chipsEl.appendChild(chip);
     });
@@ -2012,6 +2099,9 @@ function openChipModal(brandName) {
 
   title.textContent = brandName;
   _chipModalBrand = brandName;
+  var cmi = document.getElementById("chipModalImg");
+  var cmsrc = imgOf(brandName);
+  if (cmi) { if (cmsrc) { cmi.src = cmsrc; cmi.style.display = "block"; } else { cmi.removeAttribute("src"); cmi.style.display = "none"; } }
   var upc = UPCS[brandName];
   var ok = upc ? drawBarcode(canvas, upc) : null;
 
@@ -2073,6 +2163,91 @@ var DEFAULT_CARTON_UPCS = {
   "Marlboro Men Shorts Cartons":      "02836124"
 };
 
+// ---- Product images ----------------------------------------------------------
+// Pictures live in their OWN Firebase node, never inside the main state payload.
+// That matters: the main state is rewritten on every generate/undo, so putting
+// image data in it would make every tap slow. Here they load once and cache.
+var PRODUCT_IMG = {};
+try { PRODUCT_IMG = JSON.parse(localStorage.getItem("seq-images") || "{}"); } catch(e) { PRODUCT_IMG = {}; }
+function imgKey(cat) { return "k" + hashStr(String(cat)); }
+function imgOf(cat) { return PRODUCT_IMG[imgKey(cat)] || null; }
+function cacheImages() { try { localStorage.setItem("seq-images", JSON.stringify(PRODUCT_IMG)); } catch(e) {} }
+
+function imgSet(cat, dataUrl) {
+  PRODUCT_IMG[imgKey(cat)] = dataUrl;
+  cacheImages();
+  if (db) { try { db.ref("images/" + imgKey(cat)).set(dataUrl); } catch(e) {} }
+  refreshUI(); if (isEditorOpen()) renderEditor();
+  showToast("Picture saved");
+}
+function imgClear(cat) {
+  delete PRODUCT_IMG[imgKey(cat)];
+  cacheImages();
+  if (db) { try { db.ref("images/" + imgKey(cat)).remove(); } catch(e) {} }
+  refreshUI(); if (isEditorOpen()) renderEditor();
+  showToast("Picture removed");
+}
+function startImageSync() {
+  if (!db) return;
+  try {
+    db.ref("images").on("value", function(snap) {
+      var v = snap.val() || {};
+      PRODUCT_IMG = v; cacheImages();
+      refreshUI(); if (isEditorOpen()) renderEditor();
+    });
+  } catch(e) {}
+}
+
+// Shrink whatever the camera/library gives us to a small thumbnail so it stays
+// quick to sync (roughly 10-20 KB each instead of several megabytes).
+function compressImage(file, cb) {
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var img = new Image();
+    img.onload = function() {
+      var MAX = 320;
+      var w = img.width, h = img.height;
+      var scale = Math.min(1, MAX / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var cv = document.createElement("canvas");
+      cv.width = cw; cv.height = ch;
+      cv.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      var out;
+      try { out = cv.toDataURL("image/jpeg", 0.7); } catch(e) { out = null; }
+      if (!out || out.length > 400000) { showToast("That picture is too large"); return; }
+      cb(out);
+    };
+    img.onerror = function(){ showToast("Couldn't read that picture"); };
+    img.src = ev.target.result;
+  };
+  reader.onerror = function(){ showToast("Couldn't read that file"); };
+  reader.readAsDataURL(file);
+}
+
+function pickProductImage(cat) {
+  promptChoice("Picture for " + cat, [
+    { label: "Take a photo / choose from library", value: "file", color: "#10b981" },
+    { label: "Paste an image link (URL)", value: "url", color: "#3b82f6" },
+    (imgOf(cat) ? { label: "Remove picture", value: "clear", color: "#ef4444" } : null),
+    { label: "Close", value: null, color: "#64748b" }
+  ].filter(Boolean), function(v) {
+    if (v === "file") {
+      var inp = document.getElementById("imgFile");
+      inp.value = "";
+      inp.onchange = function(e) {
+        var f = e.target.files && e.target.files[0];
+        if (f) compressImage(f, function(d){ imgSet(cat, d); });
+      };
+      inp.click();
+    } else if (v === "url") {
+      promptInput("Image URL for " + cat, imgOf(cat) && /^https?:/.test(imgOf(cat)) ? imgOf(cat) : "", function(u) {
+        if (!/^https?:\/\//i.test(u)) { showToast("Needs to start with https://"); return; }
+        imgSet(cat, u.trim());
+      }, "text");
+    } else if (v === "clear") imgClear(cat);
+  });
+}
+
 // ---- Firebase Multi-User Sync -----------------------------------------------
 var FIREBASE_URL = "https://marlboro-be93f-default-rtdb.firebaseio.com";
 var db = null;
@@ -2095,6 +2270,7 @@ function initFirebase() {
         if (dot) dot.classList.toggle("connected", !!snap.val());
       });
     } catch(e) {}
+    startImageSync();
     // If user already logged in, start sync now
     if (currentUser) startSync();
   } catch(e) {
@@ -2113,7 +2289,7 @@ function loginUser(name) {
   currentUser = name.trim();
   if (!currentUser) return;
 
-  // Save username locally
+  // Remember this device's session (set in attemptLogin/tryAutoLogin)
   localStorage.setItem("seq-username", currentUser);
 
   // Register as active user
@@ -2167,9 +2343,12 @@ function startSync() {
     db.ref("users").on("value", function(snapshot) {
       var users = snapshot.val();
       if (!users) return;
+      window._presenceCache = Object.values(users);
       var online = Object.values(users).filter(function(u){ return u.online && u.name !== currentUser; }).map(function(u){ return u.name; });
       var el = document.getElementById("activeUsers");
       var textEl = document.getElementById("activeUsersText");
+      var up = document.getElementById("usersPanel");
+      if (up && up.style.display === "flex") refreshUsersPanel();
       if (online.length > 0) {
         if (textEl) textEl.textContent = online.length + " online: " + online.join(", ");
         el.style.display = "block";
@@ -2201,23 +2380,126 @@ function seedRemote() {
 }
 
 // Login button
-document.getElementById("loginBtn").onclick = function() {
-  var name = document.getElementById("usernameInput").value.trim();
-  if (!name) {
-    document.getElementById("loginError").textContent = "Please enter your name";
+// A session fingerprint ties the saved login to the current password, so if the
+// operator changes someone's password their saved session stops working.
+function sessionFp(name, pin) { return String(hashStr(String(name).toLowerCase() + "|" + pin)); }
+function saveSession(name, pin) {
+  try { localStorage.setItem("seq-session", JSON.stringify({ name: name, fp: sessionFp(name, pin) })); } catch(e) {}
+}
+function clearSession() { try { localStorage.removeItem("seq-session"); } catch(e) {} }
+
+function attemptLogin(name, pin) {
+  var err = document.getElementById("loginError");
+  var acct = accountFor(name);
+  if (!acct) { err.textContent = "No such user \u2014 ask " + operatorName() + " to add you"; return; }
+  if (!pin) { err.textContent = "Enter your password"; document.getElementById("pinInput").focus(); return; }
+  if (pin === acct.pin || pin === masterPin()) {
+    if (pin === masterPin() || acct.role === "master") masterUnlocked = (acct.role === "master") || (pin === masterPin());
+    err.textContent = "";
+    saveSession(acct.name, acct.pin);
+    loginUser(acct.name);
+  } else {
+    err.textContent = "Wrong password";
+    var pf = document.getElementById("pinInput"); pf.value = ""; pf.focus();
+  }
+}
+
+function operatorName() {
+  var m = (state.accounts || []).filter(function(a){ return a.role === "master"; })[0];
+  return m ? m.name : "the operator";
+}
+
+// Rebuild the tap-to-pick staff list on the login screen
+function renderLoginChips() {
+  var box = document.getElementById("loginUserChips");
+  if (!box) return;
+  box.innerHTML = "";
+  (state.accounts || []).forEach(function(a) {
+    var b = document.createElement("button");
+    b.style.cssText = "border:1px solid " + rgbaStr(userColor(a.name), 0.5) + ";background:" + rgbaStr(userColor(a.name), 0.14) +
+      ";color:" + userColor(a.name) + ";border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;cursor:pointer;";
+    b.textContent = a.name + (a.role === "master" ? " \u2605" : "");
+    b.onclick = function() {
+      document.getElementById("usernameInput").value = a.name;
+      var pf = document.getElementById("pinInput"); pf.value = ""; pf.focus();
+      document.getElementById("loginError").textContent = "";
+    };
+    box.appendChild(b);
+  });
+}
+
+// Silently sign back in if this device has a valid saved session
+var _autoLoginTried = false;
+function tryAutoLogin() {
+  if (currentUser) return;
+  var raw = null;
+  try { raw = JSON.parse(localStorage.getItem("seq-session") || "null"); } catch(e) {}
+  renderLoginChips();
+  if (!raw || !raw.name) return;
+  var acct = accountFor(raw.name);
+  if (!acct) return;                                  // account was removed
+  if (sessionFp(acct.name, acct.pin) !== raw.fp) {    // password was changed
+    clearSession();
+    document.getElementById("loginError").textContent = "Your password changed \u2014 please sign in again";
+    document.getElementById("usernameInput").value = acct.name;
     return;
   }
-  loginUser(name);
+  if (acct.role === "master") masterUnlocked = true;
+  loginUser(acct.name);
+}
+
+// Small numeric PIN prompt (reuses the passcode overlay styling)
+function promptPin(subtitle, cb) {
+  var overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:7000;display:flex;justify-content:center;align-items:flex-start;padding-top:calc(15vh + env(safe-area-inset-top));";
+  overlay.innerHTML = '<div style="background:#1e212b;border-radius:20px;padding:26px;width:88%;max-width:340px;text-align:center;border:1px solid rgba(255,255,255,0.1);">' +
+    '<div style="color:#fff;font-size:17px;font-weight:700;margin-bottom:6px;">PIN</div>' +
+    '<div style="color:#a0aec0;font-size:13px;margin-bottom:16px;">' + escapeHtml(subtitle) + '</div>' +
+    '<input id="pinField" type="password" inputmode="numeric" maxlength="8" placeholder="\u2022\u2022\u2022\u2022" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:22px;color:#fff;text-align:center;letter-spacing:8px;outline:none;box-sizing:border-box;margin-bottom:14px;">' +
+    '<div style="display:flex;gap:10px;">' +
+    '<button id="pinCancel" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>' +
+    '<button id="pinOk" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:#3b82f6;color:#fff;">OK</button>' +
+    '</div></div>';
+  document.body.appendChild(overlay);
+  setTimeout(function(){ var f = document.getElementById("pinField"); if (f) f.focus(); }, 100);
+  function close(){ try { document.body.removeChild(overlay); } catch(e) {} }
+  document.getElementById("pinCancel").onclick = close;
+  document.getElementById("pinOk").onclick = function(){ var v = document.getElementById("pinField").value; close(); cb(v); };
+  document.getElementById("pinField").onkeydown = function(e){ if (e.key === "Enter") document.getElementById("pinOk").onclick(); };
+}
+
+document.getElementById("loginBtn").onclick = function() {
+  var name = document.getElementById("usernameInput").value.trim();
+  var pin  = document.getElementById("pinInput").value.trim();
+  if (!name) { document.getElementById("loginError").textContent = "Enter your username"; return; }
+  attemptLogin(name, pin);
+};
+document.getElementById("pinInput").onkeydown = function(e) {
+  if (e.key === "Enter") document.getElementById("loginBtn").onclick();
 };
 document.getElementById("usernameInput").onkeydown = function(e) {
-  if (e.key === "Enter") document.getElementById("loginBtn").onclick();
+  if (e.key === "Enter") document.getElementById("pinInput").focus();
 };
 
 // Auto-login if name saved
-var savedName = localStorage.getItem("seq-username");
-if (savedName) {
-  document.getElementById("usernameInput").value = savedName;
-  loginUser(savedName);
+// Try the saved session once the local data is ready, and again after the first
+// sync lands (accounts may only exist on the server).
+renderLoginChips();
+tryAutoLogin();
+setTimeout(function(){ _autoLoginTried = true; tryAutoLogin(); }, 1500);
+
+// Sign out (back to the login screen)
+function signOut() {
+  try { if (db && currentUser) db.ref("users/" + currentUser).update({ online: false, lastSeen: Date.now() }); } catch(e) {}
+  currentUser = ""; masterUnlocked = false; editorUnlocked = false;
+  localStorage.removeItem("seq-username");
+  clearSession();
+  var pf = document.getElementById("pinInput"); if (pf) pf.value = "";
+  renderLoginChips();
+  document.getElementById("usersPanel").style.display = "none";
+  document.getElementById("activeUsers").style.display = "none";
+  document.getElementById("loginError").textContent = "";
+  document.getElementById("loginScreen").style.display = "flex";
 }
 
 
@@ -2230,46 +2512,113 @@ function openUsersPanel() {
 function refreshUsersPanel() {
   var el = document.getElementById("usersList");
   if (!el) return;
-  if (!db) {
-    el.innerHTML = "<div style='color:#a0aec0;font-size:14px;padding:8px 0;'>Connecting to Firebase...</div>";
-    return;
+  el.innerHTML = "";
+  var master = isMaster();
+  var accounts = state.accounts || [];
+
+  // Who is online right now (presence), plus today's call counts
+  var online = {};
+  try { (window._presenceCache || []).forEach(function(u){ if (u.online) online[u.name] = u.lastSeen; }); } catch(e) {}
+  var today = localDateStr(), counts = {};
+  (state.hist || []).forEach(function(h){
+    if (!h.ts || localDateStr(new Date(h.ts)) !== today) return;
+    counts[h.user || "?"] = (counts[h.user || "?"] || 0) + 1;
+  });
+
+  var hdr = document.createElement("div");
+  hdr.style.cssText = "color:#a0aec0;font-size:12px;margin-bottom:10px;line-height:1.5;";
+  hdr.innerHTML = master
+    ? "Signed in as <b style='color:" + userColor(currentUser) + "'>" + escapeHtml(currentUser) + "</b> \u00b7 <span style='color:#fcd34d;'>OPERATOR</span>. You can add or remove staff and set their passwords."
+    : "Signed in as <b style='color:" + userColor(currentUser) + "'>" + escapeHtml(currentUser) + "</b> \u00b7 employee. Ask " + escapeHtml(operatorName()) + " to add staff or reset a password.";
+  el.appendChild(hdr);
+
+  function row(name, role, hasAcct) {
+    var isMe = name === currentUser;
+    var on = !!online[name];
+    var r = document.createElement("div");
+    r.style.cssText = "display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.07);";
+    var dot = document.createElement("div");
+    dot.style.cssText = "width:10px;height:10px;border-radius:50%;flex-shrink:0;background:" + (on ? "#10b981" : "#4a5568") + ";";
+    var info = document.createElement("div");
+    info.style.cssText = "flex:1;min-width:0;";
+    info.innerHTML = "<div style='color:" + userColor(name) + ";font-size:14px;font-weight:700;'>" + escapeHtml(name) +
+        (role === "master" ? " <span style='color:#fcd34d;font-size:10px;border:1px solid rgba(245,158,11,0.5);background:rgba(245,158,11,0.15);border-radius:5px;padding:1px 5px;'>OPERATOR</span>" : "") +
+        (isMe ? " <span style='color:#a0aec0;font-size:11px;font-weight:400;'>(you)</span>" : "") + "</div>" +
+      "<div style='color:#a0aec0;font-size:12px;'>" + (on ? "Online now" : "Offline") + " \u00b7 " + (counts[name] || 0) + " calls today</div>";
+    var menu = document.createElement("button");
+    menu.className = "edit-mini-btn";
+    menu.innerHTML = "&#8943;";
+    menu.onclick = function(){ userActions(name, role, hasAcct, isMe, master); };
+    r.appendChild(dot); r.appendChild(info); r.appendChild(menu);
+    return r;
   }
-  db.ref("users").once("value", function(snapshot) {
-    var users = snapshot.val();
-    el.innerHTML = "";
-    if (!users) {
-      el.innerHTML = "<div style='color:#a0aec0;font-size:14px;padding:8px 0;'>No users yet.</div>";
-      return;
-    }
 
-    // Count calls per user
-    var callCounts = {};
-    if (state.hist) {
-      state.hist.forEach(function(h) {
-        if (h.user) callCounts[h.user] = (callCounts[h.user] || 0) + 1;
+  accounts.forEach(function(a){ el.appendChild(row(a.name, a.role, true)); });
+  // people who have signed in without an account (open mode)
+  Object.keys(online).concat(Object.keys(counts)).forEach(function(n){
+    if (!n || n === "?" || accountFor(n)) return;
+    if (el.querySelector && el.innerHTML.indexOf(">" + escapeHtml(n) + "<") !== -1) return;
+    el.appendChild(row(n, "user", false));
+  });
+  if (!accounts.length && !Object.keys(online).length) {
+    var none = document.createElement("div");
+    none.style.cssText = "color:#a0aec0;font-size:13px;padding:8px 0;";
+    none.textContent = "No accounts yet.";
+    el.appendChild(none);
+  }
+
+  if (master) {
+    var add = document.createElement("button");
+    add.className = "edit-brand-row edit-add-cat";
+    add.style.cssText += "width:100%;margin-top:12px;";
+    add.textContent = "+ Add staff member";
+    add.onclick = function() {
+      promptInput("New staff username", "", function(nm) {
+        promptInput("4-digit password for " + nm, "", function(pin) { accountAdd(nm, pin, "user"); });
+      }, "text");
+    };
+    el.appendChild(add);
+
+    var mp = document.createElement("button");
+    mp.className = "tool-btn";
+    mp.style.cssText += "width:100%;margin-top:8px;";
+    mp.innerHTML = "&#128273; Change my operator password";
+    mp.onclick = function(){
+      promptInput("New password for " + currentUser + " (4-8 digits)", "", function(p) {
+        accountSetPin(currentUser, p);
+        masterSetPin(p);
+        var a = accountFor(currentUser);
+        if (a) saveSession(a.name, String(p).replace(/\D/g, "").slice(0, 8));
       });
-    }
+    };
+    el.appendChild(mp);
+  }
 
-    Object.values(users).sort(function(a,b){ return (b.lastSeen||0) - (a.lastSeen||0); }).forEach(function(u) {
-      var isOnline = u.online;
-      var isMe = u.name === currentUser;
-      var lastSeen = u.lastSeen ? new Date(u.lastSeen).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "Unknown";
-      var calls = callCounts[u.name] || 0;
+  var so = document.createElement("button");
+  so.className = "tool-btn";
+  so.style.cssText += "width:100%;margin-top:12px;color:#fca5a5;border-color:rgba(239,68,68,0.4);";
+  so.textContent = "Sign out";
+  so.onclick = signOut;
+  el.appendChild(so);
+}
 
-      var row = document.createElement("div");
-      row.style.cssText = "display:flex;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.07);";
-      row.innerHTML =
-        "<div style='width:10px;height:10px;border-radius:50%;background:" + (isOnline ? "#10b981" : "#4a5568") + ";margin-right:12px;flex-shrink:0;'></div>" +
-        "<div style='flex:1;'>" +
-          "<div style='color:" + userColor(u.name) + ";font-size:14px;font-weight:700;'>" + escapeHtml(u.name) + (isMe ? " <span style='color:#a0aec0;font-size:11px;font-weight:400;'>(you)</span>" : "") + "</div>" +
-          "<div style='color:#a0aec0;font-size:12px;'>" + (isOnline ? "Online now" : "Last seen " + lastSeen) + "</div>" +
-        "</div>" +
-        "<div style='text-align:right;'>" +
-          "<div style='color:#e2e8f0;font-size:14px;font-weight:700;'>" + calls + "</div>" +
-          "<div style='color:#a0aec0;font-size:11px;'>calls</div>" +
-        "</div>";
-      el.appendChild(row);
+function userActions(name, role, hasAcct, isMe, master) {
+  var items = [];
+  if (hasAcct && (master || isMe)) items.push({ label: isMe ? "Change my password" : "Reset password", value: "pin", color: "#3b82f6" });
+  if (master && hasAcct && !isMe) {
+    items.push({ label: role === "master" ? "Make employee" : "Make operator", value: "role", color: "#f59e0b" });
+    items.push({ label: "Remove " + name, value: "del", color: "#ef4444" });
+  }
+  if (master && !hasAcct) items.push({ label: "Create an account for " + name, value: "create", color: "#10b981" });
+  items.push({ label: "Close", value: null, color: "#64748b" });
+  promptChoice(name, items, function(v) {
+    if (v === "pin") promptInput("New 4-digit password for " + name, "", function(p) {
+      accountSetPin(name, p);
+      if (name === currentUser) saveSession(name, String(p).replace(/\D/g, "").slice(0, 8));
     });
+    if (v === "role") accountSetRole(name, role === "master" ? "user" : "master");
+    if (v === "del")  accountRemove(name);
+    if (v === "create") promptInput("4-digit password for " + name, "", function(p){ accountAdd(name, p, "user"); });
   });
 }
 
@@ -2405,9 +2754,21 @@ document.getElementById("specialBarcodeModal").onclick = function(e) {
 };
 
 // ---- Passcode gate ------------------------------------------------------------
-var APP_PASSCODE = "1234";
+var APP_PASSCODE = "1212";          // fallback before the first sync lands
+function masterPin() { return (state && state.masterPin) || APP_PASSCODE; }
+function accountFor(name) {
+  var list = (state && state.accounts) || [];
+  for (var i = 0; i < list.length; i++) if (list[i].name.toLowerCase() === String(name || "").toLowerCase()) return list[i];
+  return null;
+}
+function isMaster() {
+  var a = accountFor(currentUser);
+  return (a && a.role === "master") || masterUnlocked;
+}
+var masterUnlocked = false;   // set once the master passcode is entered this session
 
 function promptPasscode(subtitle, onSuccess) {
+  if (isMaster()) { onSuccess(); return; }   // the operator is already signed in
   var overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:6000;display:flex;justify-content:center;align-items:flex-start;padding-top:calc(15vh + env(safe-area-inset-top));";
   overlay.innerHTML = '<div style="background:#1e212b;border-radius:20px;padding:28px;width:88%;max-width:340px;text-align:center;border:1px solid rgba(255,255,255,0.1);">' +
@@ -2425,7 +2786,8 @@ function promptPasscode(subtitle, onSuccess) {
   document.getElementById("passCancel").onclick = function() { document.body.removeChild(overlay); };
   document.getElementById("passConfirm").onclick = function() {
     var val = document.getElementById("passInput").value;
-    if (val === APP_PASSCODE) {
+    if (val === masterPin()) {
+      masterUnlocked = true;
       document.body.removeChild(overlay);
       onSuccess();
     } else {
@@ -2436,6 +2798,61 @@ function promptPasscode(subtitle, onSuccess) {
   document.getElementById("passInput").onkeydown = function(e) {
     if (e.key === "Enter") document.getElementById("passConfirm").onclick();
   };
+}
+
+// ---- Accounts (master-managed) ----------------------------------------------
+function accountAdd(name, pin, role) {
+  name = String(name || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 20);
+  pin  = String(pin || "").replace(/\D/g, "").slice(0, 8);
+  if (!name) { showToast("Enter a name"); return; }
+  if (pin.length < 4) { showToast("Password must be at least 4 digits"); return; }
+  markUndo("Add user");
+  mutateShared(function(st) {
+    if (st.accounts.some(function(a){ return a.name.toLowerCase() === name.toLowerCase(); })) return false;
+    st.accounts.push({ name: name, pin: pin, role: role === "master" ? "master" : "user" });
+    return st;
+  }, function(c){ if (c) { showToast("Staff member added"); refreshUsersPanel(); } else showToast("That name already exists"); });
+}
+function accountRemove(name) {
+  markUndo("Remove user");
+  mutateShared(function(st) {
+    var before = st.accounts.length;
+    st.accounts = st.accounts.filter(function(a){ return a.name !== name; });
+    return st.accounts.length === before ? false : st;
+  }, function(c){ if (c) { showToast("Staff member removed"); refreshUsersPanel(); } });
+}
+function accountSetPin(name, pin) {
+  pin = String(pin || "").replace(/\D/g, "").slice(0, 8);
+  if (pin.length < 4) { showToast("Password must be at least 4 digits"); return; }
+  markUndo("Change PIN");
+  mutateShared(function(st) {
+    var a = st.accounts.filter(function(x){ return x.name === name; })[0];
+    if (!a) return false;
+    a.pin = pin;
+    return st;
+  }, function(c){ if (c) { showToast("Password updated"); refreshUsersPanel(); } });
+}
+function accountSetRole(name, role) {
+  markUndo("Change role");
+  mutateShared(function(st) {
+    var a = st.accounts.filter(function(x){ return x.name === name; })[0];
+    if (!a) return false;
+    if (a.role === "master" && role !== "master" && st.accounts.filter(function(x){ return x.role === "master"; }).length <= 1) return false;
+    a.role = role === "master" ? "master" : "user";
+    return st;
+  }, function(c){ if (c) { showToast("Role updated"); refreshUsersPanel(); } else showToast("Keep at least one master"); });
+}
+function masterSetPin(pin) {
+  pin = String(pin || "").replace(/\D/g, "").slice(0, 8);
+  if (pin.length < 4) { showToast("Password must be at least 4 digits"); return; }
+  markUndo("Change master passcode");
+  mutateShared(function(st){ st.masterPin = pin; return st; },
+    function(c){ if (c) { showToast("Master passcode changed"); refreshUsersPanel(); } });
+}
+function setRequireLogin(v) {
+  markUndo("Login policy");
+  mutateShared(function(st){ st.requireLogin = !!v; return st; },
+    function(c){ if (c) { showToast(v ? "Only listed users can sign in" : "Anyone with a name can sign in"); refreshUsersPanel(); } });
 }
 
 // ---- Number & Barcode Editor ---------------------------------------------------
@@ -2759,6 +3176,56 @@ function modeDelete(id) {
   }, function(c){ if (c) { editorModeId = null; renderEditor(); restoreListScroll(); showToast("Schedule deleted"); } else showToast("Keep at least one schedule"); });
 }
 
+// ---- Duplicate guard ---------------------------------------------------------
+// A phone number should exist in exactly one place. Before anything is added or
+// edited we look across EVERY list (weekday, weekend and cartons) and report
+// where a clash already lives. "SCAN" placeholders are exempt - they repeat by
+// design.
+function findNumberOwner(st, value, skip) {
+  if (!value || value === "SCAN") return null;
+  skip = skip || {};
+  var hit = null;
+  (st.order || []).forEach(function(cat) {
+    if (hit) return;
+    (st.nums[cat] || []).forEach(function(v, i) {
+      if (hit || v !== value) return;
+      if (skip.kind === "main" && skip.cat === cat && skip.idx === i) return;
+      hit = { cat: cat, kind: "main", idx: i, label: cat + " (weekday)" };
+    });
+    if (hit) return;
+    ((st.wnums || {})[cat] || []).forEach(function(v, i) {
+      if (hit || v !== value) return;
+      if (skip.kind === "weekend" && skip.cat === cat && skip.idx === i) return;
+      hit = { cat: cat, kind: "weekend", idx: i, label: cat + " (weekend)" };
+    });
+  });
+  if (!hit) (st.cartonOrder || []).forEach(function(cat) {
+    if (hit) return;
+    (st.cartonNums[cat] || []).forEach(function(v, i) {
+      if (hit || v !== value) return;
+      if (skip.kind === "cartons" && skip.cat === cat && skip.idx === i) return;
+      hit = { cat: cat, kind: "cartons", idx: i, label: cat + " (carton)" };
+    });
+  });
+  return hit;
+}
+function editorKindOf(sec) { return sec === "cartons" ? "cartons" : (editorListKind === "weekend" ? "weekend" : "main"); }
+
+// Scan every list and report repeats
+function findAllDuplicates(st) {
+  var seen = {}, dups = [];
+  function walk(cat, arr, kind) {
+    (arr || []).forEach(function(v) {
+      if (!v || v === "SCAN") return;
+      if (seen[v]) { if (dups.indexOf(v) === -1) dups.push(v); seen[v].push(cat + (kind === "weekend" ? " (weekend)" : kind === "cartons" ? " (carton)" : "")); }
+      else seen[v] = [cat + (kind === "weekend" ? " (weekend)" : kind === "cartons" ? " (carton)" : "")];
+    });
+  }
+  (st.order || []).forEach(function(c){ walk(c, st.nums[c], "main"); walk(c, (st.wnums || {})[c], "weekend"); });
+  (st.cartonOrder || []).forEach(function(c){ walk(c, st.cartonNums[c], "cartons"); });
+  return dups.map(function(v){ return { num: v, where: seen[v] }; });
+}
+
 function formatPhone(text) {
   var t = String(text || "").trim();
   if (!t) return "";
@@ -2796,7 +3263,10 @@ function numAdd(sec, brand, text, randomize) {
   markUndo("Add number");
   var formatted = formatPhone(text);
   if (!formatted) return;
+  var clash = findNumberOwner(state, formatted);
+  if (clash) { showToast("Already in " + clash.label + " \u2014 not added"); return; }
   mutateShared(function(st) {
+    if (findNumberOwner(st, formatted)) return false;   // re-check inside the transaction
     var arr = secNums(st, sec)[brand];
     if (!arr) return false;
     if (randomize) {
@@ -2816,7 +3286,11 @@ function numEdit(sec, brand, idx, expected, text) {
   markUndo("Edit number");
   var formatted = formatPhone(text);
   if (!formatted) return;
+  var skipSelf = { cat: brand, kind: editorKindOf(sec), idx: idx };
+  var clash0 = findNumberOwner(state, formatted, skipSelf);
+  if (clash0) { showToast("Already in " + clash0.label + " \u2014 not changed"); return; }
   mutateShared(function(st) {
+    if (findNumberOwner(st, formatted, skipSelf)) return false;
     var arr = secNums(st, sec)[brand];
     if (!arr || idx >= arr.length || arr[idx] !== expected) return false;
     arr[idx] = formatted;
@@ -3077,9 +3551,18 @@ function numAddBulk(sec, brand, text, randomize) {
   markUndo("Bulk add");
   var parts = String(text || "").split(/[\n,;]+/).map(function(x){ return formatPhone(x); }).filter(function(x){ return x; });
   if (!parts.length) { showToast("No numbers found"); return; }
+  var skipped = 0;
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr) return false;
+    // Drop anything already on file, and any repeats inside this paste itself
+    var fresh = [], localSeen = {};
+    parts.forEach(function(n) {
+      if (n !== "SCAN" && (findNumberOwner(st, n) || localSeen[n])) { skipped++; return; }
+      localSeen[n] = 1; fresh.push(n);
+    });
+    parts = fresh;
+    if (!parts.length) return false;
     if (randomize) {
       var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
       parts.forEach(function(n){
@@ -3091,7 +3574,8 @@ function numAddBulk(sec, brand, text, randomize) {
     }
     return st;
   }, function(c) {
-    if (c) showToast("Added " + parts.length + " number" + (parts.length === 1 ? "" : "s") + (randomize ? " randomly" : ""));
+    if (c) showToast("Added " + parts.length + (skipped ? " \u00b7 skipped " + skipped + " duplicate" + (skipped === 1 ? "" : "s") : ""));
+    else if (skipped) showToast("All " + skipped + " were already on file");
   });
 }
 
@@ -3293,6 +3777,22 @@ function renderEditor() {
       var shufRow = document.createElement("div");
       shufRow.style.cssText = "display:flex;gap:8px;margin-bottom:12px;";
 
+      var dupBtn = document.createElement("button");
+      dupBtn.className = "tool-btn";
+      dupBtn.style.width = "100%";
+      dupBtn.style.marginBottom = "8px";
+      dupBtn.innerHTML = "&#128269; Check for duplicate numbers";
+      dupBtn.onclick = function() {
+        var d = findAllDuplicates(state);
+        if (!d.length) { showToast("No duplicates \u2014 every number is unique"); return; }
+        var lines = d.slice(0, 12).map(function(x){ return x.num + "  \u2192  " + x.where.join(", "); });
+        promptChoice("Found " + d.length + " duplicate" + (d.length === 1 ? "" : "s"),
+          lines.map(function(l){ return { label: l, value: null, color: "#ef4444" }; })
+            .concat([{ label: "Close", value: null, color: "#64748b" }]),
+          function(){});
+      };
+      content.appendChild(dupBtn);
+
       var masterShuffle = document.createElement("button");
       masterShuffle.className = "tool-btn";
       masterShuffle.style.flex = "1";
@@ -3337,7 +3837,9 @@ function renderEditor() {
         countTxt = (nums[b] || []).length + " nums";
       }
       var upcDot = liveUpcs(sec)[b] ? "<span style='color:#fcd34d;'>&#9646;</span> " : "";
-      row.innerHTML = "<span style='color:#fff;font-weight:600;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escapeHtml(b) + "</span>" +
+      var rimg = imgOf(b);
+      row.innerHTML = (rimg ? "<img class='row-img' src='" + escapeHtml(rimg) + "' alt='' />" : "") +
+        "<span style='color:#fff;font-weight:600;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escapeHtml(b) + "</span>" +
         "<span style='color:#a0aec0;font-size:13px;flex-shrink:0;'>" + upcDot + countTxt + " &rsaquo;</span>";
       row.onclick = function() {
         rememberListScroll();   // so Back returns exactly here
@@ -3434,6 +3936,24 @@ function renderEditor() {
   renameVal.appendChild(renameBtn);
   renameRow.appendChild(renameVal);
   settings.appendChild(renameRow);
+
+  // Product picture (stored separately from the main data, so it stays fast)
+  var imgRow = document.createElement("div");
+  imgRow.className = "settings-row";
+  imgRow.innerHTML = "<span class='settings-label'>Picture</span>";
+  var imgVal = document.createElement("div");
+  imgVal.className = "settings-val";
+  var curImg = imgOf(brand);
+  imgVal.innerHTML = curImg
+    ? "<img class='row-img' src='" + escapeHtml(curImg) + "' alt='' />"
+    : "<span style='color:#a0aec0;font-weight:400;'>None</span>";
+  var imgBtn = document.createElement("button");
+  imgBtn.className = "settings-btn";
+  imgBtn.textContent = curImg ? "Change" : "Add";
+  imgBtn.onclick = function(){ pickProductImage(brand); };
+  imgVal.appendChild(imgBtn);
+  imgRow.appendChild(imgVal);
+  settings.appendChild(imgRow);
 
   if (sec2 === "calls") {
     var famRow = document.createElement("div");
