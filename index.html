@@ -832,16 +832,57 @@ function weekdayShareCount(st, cat) {
   return Math.ceil(arr.length * weekendCfg(st).weight);
 }
 
+// -- Deterministic RNG so the "random half" is the SAME on every device --------
+function hashStr(str) {
+  var h = 2166136261 >>> 0;
+  for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+function seededRand(seed) {
+  var a = seed >>> 0;
+  return function() {
+    a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Which of the weekday numbers take part this weekend: a RANDOM share%, not the
+// front of the list. The draw is seeded from the category name plus the current
+// reset stamp, which means:
+//   - it is identical on every device (no sync needed, same inputs -> same pick)
+//   - it stays put while you work (never re-rolls mid-shift)
+//   - it re-draws whenever progress resets, so a new day = a different crowd
+// The chosen numbers keep their original relative order.
+function weekdaySubsetIdx(st, cat) {
+  st = st || state;
+  var arr = (st.nums || {})[cat] || [];
+  var n = arr.length;
+  if (!n) return [];
+  var k = Math.ceil(n * weekendCfg(st).weight);
+  if (k >= n) { var all = []; for (var q = 0; q < n; q++) all.push(q); return all; }
+  if (k <= 0) return [];
+  var idx = []; for (var i = 0; i < n; i++) idx.push(i);
+  var rnd = seededRand(hashStr(cat + "|" + (st.autoResetDate || "") + "|" + k + "/" + n));
+  for (var j = n - 1; j > 0; j--) {            // seeded Fisher-Yates
+    var r = Math.floor(rnd() * (j + 1));
+    var t = idx[j]; idx[j] = idx[r]; idx[r] = t;
+  }
+  return idx.slice(0, k).sort(function(a, b){ return a - b; });
+}
+
 // The pool a category actually uses right now.
 //   weekday : the original list
-//   weekend : first share% of the original list + the whole weekend list
+//   weekend : a random share% of the original list + the whole weekend list
 function activeListOf(st, cat, wk) {
   st = st || state;
   if (wk === undefined) wk = isWeekendNow(st);
   var main = (st.nums || {})[cat] || [];
   if (!wk) return main;
   var wl = (st.wnums || {})[cat] || [];
-  return main.slice(0, weekdayShareCount(st, cat)).concat(wl);
+  var pick = weekdaySubsetIdx(st, cat).map(function(i){ return main[i]; });
+  return pick.concat(wl);
 }
 function activePosOf(st, cat, wk) {
   st = st || state;
@@ -3116,7 +3157,16 @@ function stopScanner() {
 }
 function openScanner(title, cb) {
   if (typeof Html5Qrcode === "undefined") { showToast("Scanner not loaded - check your connection"); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { showToast("This browser can't use the camera here"); return; }
+  // Give a SPECIFIC reason instead of one generic message, so it's diagnosable
+  // from the phone alone without guessing.
+  if (typeof window.isSecureContext !== "undefined" && !window.isSecureContext) {
+    showToast("This page isn't loaded securely (needs https\u2014open the real link, not a preview)");
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast("No camera API here \u2014 check Private Browsing is off and Screen Time \u2192 Content & Privacy \u2192 Camera is allowed");
+    return;
+  }
   var modal = document.getElementById("scanModal");
   document.getElementById("scanTitle").textContent = title || "Scan barcode";
   document.getElementById("scanStatus").textContent = "Starting camera\u2026";
@@ -3490,13 +3540,19 @@ function renderEditor() {
     var halfN = weekdayShareCount(state, brand);
     var wkN = ((state.wnums && state.wnums[brand]) || []).length;
     kindNote.innerHTML = editorListKind === "weekend"
-      ? "Weekend-only numbers. On weekends the pool for this category is the <b>first " + sharePct + "%</b> of the weekday list (" + halfN + ") <b>+ these " + wkN + "</b> = " + (halfN + wkN) + "."
-      : "The everyday list. On weekends only the <b>first " + sharePct + "%</b> of it (" + halfN + ") is used, merged with the " + wkN + " weekend number" + (wkN === 1 ? "" : "s") + ".";
+      ? "Weekend-only numbers. On weekends the pool for this category is a <b>random " + sharePct + "%</b> of the weekday list (" + halfN + ") <b>+ these " + wkN + "</b> = " + (halfN + wkN) + "."
+      : "The everyday list. On weekends a <b>random " + sharePct + "%</b> of it (" + halfN + ") is used, merged with the " + wkN + " weekend number" + (wkN === 1 ? "" : "s") + ". The draw re-rolls each time progress resets.";
     content.appendChild(kindNote);
   }
 
   var arr = liveNums(sec2)[brand] || [];
   var p = (sec2 === "calls" && editorListKind === "main") ? (state.pos[brand] || 0) : 0;
+  // While the weekend window is active, mark which weekday numbers were drawn
+  var _wkPickSet = null;
+  if (sec2 === "calls" && editorListKind === "main" && isWeekendNow(state)) {
+    _wkPickSet = {};
+    weekdaySubsetIdx(state, brand).forEach(function(i){ _wkPickSet[i] = 1; });
+  }
 
   // Toolbar: Shuffle (gentle nudge) / Select (bulk delete) / Bulk Add
   var toolbar = document.createElement("div");
@@ -3599,6 +3655,10 @@ function renderEditor() {
       var txt = document.createElement("div");
       txt.className = "edit-num-text";
       txt.textContent = num;
+      if (_wkPickSet && _wkPickSet[idx]) {
+        txt.innerHTML = "<span style='color:#c4b5fd;font-weight:800;'>\u25CF</span> " + escapeHtml(num);
+        txt.title = "In this weekend's draw";
+      }
       txt.onclick = function() {
         promptInput("Edit number - " + brand, num, function(v) { numEdit(sec2, brand, idx, num, v); });
       };
@@ -3862,7 +3922,7 @@ function renderModesTab(content) {
 
   var wkNote = document.createElement("div");
   wkNote.style.cssText = "color:#a0aec0;font-size:12px;line-height:1.5;margin-bottom:10px;";
-  wkNote.textContent = "Inside this window each category calls the first " + Math.round(w.weight * 100)
+  wkNote.textContent = "Inside this window each category calls a random " + Math.round(w.weight * 100)
     + "% of its weekday list merged with its whole weekend list, at " + Math.round(w.quota * 100)
     + "% of a normal day's volume. Right now it is " + (isWeekendNow() ? "WEEKEND" : "a weekday") + ".";
   content.appendChild(wkNote);
@@ -3894,7 +3954,7 @@ function renderModesTab(content) {
     function(){ weekendStepHour("endHour", -1); }, function(){ weekendStepHour("endHour", 1); }));
   content.appendChild(wkStepper("End day", DAY_NAMES[w.endDay],
     function(){ weekendStepDay("endDay", -1); }, function(){ weekendStepDay("endDay", 1); }));
-  content.appendChild(wkStepper("Share of weekday list used", Math.round(w.weight * 100) + "% (first part of each list)",
+  content.appendChild(wkStepper("Share of weekday list used", Math.round(w.weight * 100) + "% (randomly drawn each reset)",
     function(){ weekendStepWeight(-0.05); }, function(){ weekendStepWeight(0.05); }));
 
   content.appendChild(wkStepper("Weekend call volume", Math.round(w.quota * 100) + "% of a normal day"
