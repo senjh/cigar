@@ -36,9 +36,11 @@
   .panel-footer { flex-shrink: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #161925; border-top: 1px solid rgba(255,255,255,0.1); }
 
   /* Top Bar */
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; }
+  .header-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+  .mode-row { margin-bottom: 14px; }
   .header h1 { margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; }
-  .mode-badge { background: rgba(59,130,246,0.3); color: #93c5fd; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid rgba(59,130,246,0.6); user-select: none; }
+  .mode-badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(59,130,246,0.3); color: #93c5fd; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid rgba(59,130,246,0.6); user-select: none; }
 
   /* ---- Motion: small, cheap, GPU-friendly. Disabled if the phone asks for
      reduced motion, and never animates layout properties (only transform/opacity). */
@@ -69,7 +71,8 @@
   #colorModal[style*="flex"] > div, #familyPicker[style*="flex"] > div,
   #modePicker[style*="flex"] > div, #scanModal[style*="flex"] > div,
   #backupModal[style*="flex"] > div, #usersPanel[style*="flex"] > div { animation: seqSlideUp 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  #_toast { animation: seqRise 180ms ease both; }
+  @keyframes seqDrop { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  #_toast { animation: seqDrop 180ms ease both; }
   .edit-num-row { transition: transform 120ms ease, background 180ms ease, border-color 180ms ease, opacity 180ms ease; }
 
   @media (prefers-reduced-motion: reduce) {
@@ -203,6 +206,10 @@
   .edit-brand-row:active { opacity: 0.7; }
   .edit-add-cat { border: 1px dashed rgba(59,130,246,0.5) !important; background: rgba(59,130,246,0.07); color: #93c5fd; justify-content: center; font-weight: 700; }
   .edit-num-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1e212b; border: 1px solid rgba(255,255,255,0.1); border-left: 3px solid rgba(255,255,255,0.15); border-radius: 10px; margin-bottom: 6px; }
+  .edit-num-row.inactive .edit-num-text { text-decoration: line-through; opacity: 0.45; }
+  .edit-num-row.inactive { border-style: dashed; }
+  .edit-mini-btn.act { color: #10b981; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.08); }
+  .edit-mini-btn.act.off { color: #718096; border-color: rgba(255,255,255,0.15); background: transparent; }
   .edit-num-row.called { border-left-color: #10b981; opacity: 0.65; }
   .edit-idx { flex-shrink: 0; min-width: 22px; text-align: center; color: #718096; font-size: 11px; font-weight: 700; }
   .edit-num-text { flex: 1; color: #fff; font-size: 15px; font-weight: 600; font-family: ui-monospace, monospace; cursor: pointer; padding: 6px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -293,13 +300,14 @@
 
 <div class="container">
   <div class="header">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <h1>Sequencer</h1>
+    <h1>Sequencer</h1>
+    <div class="header-nav">
       <button id="specialBtn" style="background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.4);color:#fcd34d;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">Cartons</button>
       <button id="editBtn" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#93c5fd;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
+      <button id="historyBtn" style="background:rgba(168,85,247,0.18);border:1px solid rgba(168,85,247,0.4);color:#d8b4fe;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">History</button>
     </div>
-    <div id="modeBtn" class="mode-badge">Mode: Full Day</div>
   </div>
+  <div class="mode-row"><div id="modeBtn" class="mode-badge">Mode: Full Day</div></div>
 
   <div class="status-row">
     <div id="dayModeBadge" class="daymode wd"><span>Weekday</span><span class="sub"></span></div>
@@ -383,6 +391,15 @@
     <button id="specialClose" class="panel-btn">Close</button>
   </div>
   <div class="panel-body"><div id="specialContent" class="panel-inner"></div></div>
+</div>
+
+<!-- History panel -->
+<div id="historyPanel" class="app-panel">
+  <div class="panel-header">
+    <h2 style="color:#d8b4fe;">History</h2>
+    <button id="historyClose" class="panel-btn">Close</button>
+  </div>
+  <div class="panel-body"><div id="historyContent" class="panel-inner"></div></div>
 </div>
 
 <!-- Number & Barcode Editor Panel -->
@@ -984,6 +1001,28 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+// Roll a day's call log into a compact summary (for the History panel)
+function summarizeHist(hist, dateStr) {
+  var byHour = []; for (var i = 0; i < 24; i++) byHour.push(0);
+  var byUser = {}, byCat = {}, total = 0;
+  (hist || []).forEach(function(e) {
+    if (!e || !e.ts) return;
+    total++;
+    byHour[new Date(e.ts).getHours()]++;
+    var u = e.user || "?"; byUser[u] = (byUser[u] || 0) + 1;
+    byCat[e.set] = (byCat[e.set] || 0) + 1;
+  });
+  return { date: dateStr, total: total, byHour: byHour, byUser: byUser, byCat: byCat };
+}
+function archiveDay(st) {
+  if (!st.hist || !st.hist.length) return;
+  var first = st.hist[0].ts ? localDateStr(new Date(st.hist[0].ts)) : localDateStr();
+  var sum = summarizeHist(st.hist, first);
+  st.archive = (st.archive || []).filter(function(d){ return d.date !== first; });
+  st.archive.push(sum);
+  st.archive = st.archive.slice(-30);
+}
+
 // Local calendar date as YYYY-MM-DD (used for the nightly auto-reset stamp)
 function localDateStr(d) {
   d = d || new Date();
@@ -1039,6 +1078,7 @@ function bootstrap() {
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
     accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
+    inactive: state.inactive, archive: state.archive,
     rev: state.rev
   });
   state.pos = norm.pos; state.hist = norm.hist; state.mode = norm.mode;
@@ -1049,6 +1089,7 @@ function bootstrap() {
   state.dayOf = norm.dayOf; state.weekend = norm.weekend;
   state.wnums = norm.wnums; state.wpos = norm.wpos; state.cartonDone = norm.cartonDone;
   state.accounts = norm.accounts; state.masterPin = norm.masterPin; state.requireLogin = norm.requireLogin;
+  state.inactive = norm.inactive; state.archive = norm.archive;
   state.rev = norm.rev || 0;
   syncRefs();
   if (state.ptr === undefined || state.ptr === null || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
@@ -1057,10 +1098,57 @@ function bootstrap() {
 }
 
 // ---- Shift / Block helpers --------------------------------------------------
+// ---- Who has been called today? -------------------------------------------
+// Derived from the call log rather than a list pointer, so the pick order can be
+// random and the lists can be reordered/edited freely without losing track.
+// Numbers are matched by VALUE (they're unique); SCAN placeholders by index.
+function calledSetsOf(st) {
+  var out = {};
+  (st.hist || []).forEach(function(e) {
+    var key = e.set + "|" + (e.wk ? 1 : 0);
+    var bucket = out[key] || (out[key] = { vals: {}, idxs: {} });
+    if (e.num === "SCAN") { if (e.numIdx !== undefined) bucket.idxs[e.numIdx] = 1; }
+    else if (e.num) bucket.vals[e.num] = 1;
+  });
+  return out;
+}
+function isCalledIn(called, cat, wk, idx, val) {
+  var b = called[cat + "|" + (wk ? 1 : 0)];
+  if (!b) return false;
+  return val === "SCAN" ? !!b.idxs[idx] : !!b.vals[val];
+}
+function isInactive(st, val) { return !!((st || state).inactive || {})[val]; }
+
+// The slice of a list that belongs to the CURRENT time block. Lists are split
+// into as many equal chunks as the schedule has shifts; picks stay inside the
+// current chunk. Ungated schedules (no shifts) use the whole list.
+function chunkRangeOf(len, info) {
+  if (!info || !info.gated || !info.count || info.idx == null || info.idx < 0) return [0, len];
+  var size = Math.ceil(len / info.count);
+  var start = Math.min(len, info.idx * size);
+  return [start, Math.min(len, start + size)];
+}
+
+// Indices in this category's pool that can be picked right now:
+// inside the current block, active, and not yet called.
+function eligibleIdxOf(st, cat, wk, info, called) {
+  var arr = activeListOf(st, cat, wk);
+  var r = chunkRangeOf(arr.length, info);
+  var out = [];
+  for (var i = r[0]; i < r[1]; i++) {
+    var v = arr[i];
+    if (isInactive(st, v)) continue;
+    if (isCalledIn(called, cat, wk, i, v)) continue;
+    out.push(i);
+  }
+  return out;
+}
+
+// Total pickable numbers today (active only) - drives the per-shift quota
 function totalNumsOf(st) {
   var wk = isWeekendNow(st);
   return (st.order || []).reduce(function(a, b){
-    return a + activeListOf(st, b, wk).length;
+    return a + activeListOf(st, b, wk).filter(function(v){ return !isInactive(st, v); }).length;
   }, 0);
 }
 
@@ -1154,7 +1242,7 @@ function normalizeShared(st) {
   st.modes = toList(st.modes).filter(function(m){ return m && m.id; }).map(function(m){
     var open = Math.max(0, Math.min(23, Math.round(m.open || 0)));
     var close = Math.max(0, Math.min(24, Math.round(m.close == null ? 0 : m.close))) % 24;
-    var shifts = Math.max(0, Math.min(12, Math.round(m.shifts || 0)));
+    var shifts = Math.max(0, Math.min(24, Math.round(m.shifts || 0)));
     return { id: m.id, name: m.name || m.id, color: m.color || "#3b82f6", open: open, close: close, shifts: shifts };
   });
   if (!st.modes.length) st.modes = JSON.parse(JSON.stringify(DEFAULT_MODES));
@@ -1162,6 +1250,12 @@ function normalizeShared(st) {
   if (modeIds.indexOf(st.mode) === -1) st.mode = st.modes[0].id;
 
   if (!st.autoResetDate) st.autoResetDate = localDateStr();
+
+  // Daily archive: [{ date, total, byHour:[24], byUser:{}, byCat:{} }] - last 30 days
+  st.archive = toList(st.archive).filter(function(d){ return d && d.date; }).slice(-30);
+
+  // Inactive numbers: { "(601) 555-1234": 1 } - kept in the lists but never picked
+  if (!st.inactive || typeof st.inactive !== "object" || Array.isArray(st.inactive)) st.inactive = {};
 
   // Accounts: [{ name, pin, role }] - role "master" can manage everyone.
   // masterPin gates the Edit panel / Reset and is changeable by the master.
@@ -1230,6 +1324,7 @@ function sharedSnapshot() {
     autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
     accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
+    inactive: state.inactive, archive: state.archive,
     rev: state.rev || 0
   }));
 }
@@ -1239,7 +1334,9 @@ function encodeShared(st) {
     mode: st.mode, hist: st.hist, rev: st.rev || 0,
     autoResetDate: st.autoResetDate || "",
     weekend: st.weekend,
-    accounts: st.accounts || [], masterPin: st.masterPin || "1234", requireLogin: !!st.requireLogin,
+    accounts: st.accounts || [], masterPin: st.masterPin || "1212", requireLogin: !!st.requireLogin,
+    inactiveList: Object.keys(st.inactive || {}),
+    archive: st.archive || [],
     families: st.families.map(function(f){ return { name: f.name, color: f.color }; }),
     modes: st.modes.map(function(m){ return { id: m.id, name: m.name, color: m.color, open: m.open, close: m.close, shifts: m.shifts }; }),
     catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", day: st.dayOf[n] || "always", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
@@ -1256,7 +1353,9 @@ function decodeShared(remote) {
   var st = { mode: remote.mode || "blocks", hist: toList(remote.hist), rev: remote.rev || 0,
              autoResetDate: remote.autoResetDate || "",
              weekend: remote.weekend || null, dayOf: {}, wnums: {}, wpos: {}, cartonDone: {},
-             accounts: toList(remote.accounts), masterPin: remote.masterPin || "1234", requireLogin: remote.requireLogin === true,
+             accounts: toList(remote.accounts), masterPin: remote.masterPin || "1212", requireLogin: remote.requireLogin === true,
+             inactive: (function(){ var o = {}; toList(remote.inactiveList).forEach(function(v){ if (v) o[v] = 1; }); return o; })(),
+             archive: toList(remote.archive),
              pos: {}, nums: {}, upcs: {}, order: [], families: [], familyOf: {}, modes: [],
              cartonNums: {}, cartonUpcs: {}, cartonOrder: [] };
   st.families = toList(remote.families).filter(function(f){ return f && f.name; }).map(function(f){ return { name: f.name, color: f.color || "#64748b" }; });
@@ -1308,6 +1407,7 @@ function applyShared(stMap) {
   state.dayOf = stMap.dayOf; state.weekend = stMap.weekend;
   state.wnums = stMap.wnums; state.wpos = stMap.wpos; state.cartonDone = stMap.cartonDone;
   state.accounts = stMap.accounts; state.masterPin = stMap.masterPin; state.requireLogin = stMap.requireLogin;
+  state.inactive = stMap.inactive; state.archive = stMap.archive;
   state.rev  = stMap.rev || 0;
   syncRefs();
   if (wasAtEnd || state.ptr > state.hist.length - 1) state.ptr = state.hist.length - 1;
@@ -1317,6 +1417,8 @@ function applyShared(stMap) {
   if (!currentUser) { renderLoginChips(); tryAutoLogin(); }
   var sp = document.getElementById("specialPanel");
   if (sp && sp.style.display === "flex") buildCartonsPanel();
+  var hp = document.getElementById("historyPanel");
+  if (hp && hp.style.display === "flex") buildHistoryPanel();
 }
 
 // ---- Edit undo ---------------------------------------------------------------
@@ -1334,7 +1436,7 @@ function snapshotEditable(st) {
     familyOf: st.familyOf, dayOf: st.dayOf, families: st.families,
     cartonNums: st.cartonNums, cartonUpcs: st.cartonUpcs, cartonOrder: st.cartonOrder,
     cartonDone: st.cartonDone || {},
-    modes: st.modes, weekend: st.weekend,
+    modes: st.modes, weekend: st.weekend, inactive: st.inactive || {},
     pos: st.pos, wpos: st.wpos
   }));
 }
@@ -1392,7 +1494,7 @@ function editUndoLast() {
     st.familyOf = d.familyOf; st.dayOf = d.dayOf; st.families = d.families;
     st.cartonNums = d.cartonNums; st.cartonUpcs = d.cartonUpcs; st.cartonOrder = d.cartonOrder;
     st.cartonDone = d.cartonDone || {};
-    st.modes = d.modes; st.weekend = d.weekend;
+    st.modes = d.modes; st.weekend = d.weekend; st.inactive = d.inactive || {};
     if (st.hist.length === snap.histLen) { st.pos = d.pos; st.wpos = d.wpos; }
     return st;
   }, function(c) {
@@ -1415,19 +1517,24 @@ function onNext(onFinish) {
       if (shiftStats(st).remaining <= 0) return false;
     }
 
-    // On a weekend the pool for each category is: the first share% of its
-    // weekday list PLUS its whole weekend list, merged.
+    // Build each list's pickable set for THIS time block: inside the block's
+    // chunk, active, not yet called (weekend pools merge in weekend numbers).
     var wk = isWeekendNow(st);
+    var called = calledSetsOf(st);
+    var elig = {};
     var available = st.order.filter(function(b){
-      return activePosOf(st, b, wk) < activeListOf(st, b, wk).length;
+      elig[b] = eligibleIdxOf(st, b, wk, info, called);
+      return elig[b].length > 0;
     });
     if (!available.length) return false;
 
-    // Weighted random - probability proportional to how many are left in each pool
-    var set = weightedRandom(st, available, wk);
+    // Which LIST: weighted random - bigger lists (more left in this block) come
+    // up more often. Which NUMBER inside it: uniform random within the block.
+    var set = weightedRandom(available, function(b){ return elig[b].length; });
+    var choices = elig[set];
+    var numIdx = choices[Math.floor(Math.random() * choices.length)];
     var arr = activeListOf(st, set, wk);
-    var numIdx = activePosOf(st, set, wk);
-    setActivePos(st, set, wk, numIdx + 1);
+    setActivePos(st, set, wk, activePosOf(st, set, wk) + 1);
     st.hist.push({ set: set, num: arr[numIdx], numIdx: numIdx, wk: wk ? 1 : 0, shiftIdx: info.idx, shiftMode: st.mode, ts: Date.now(), user: currentUser });
     return st;
   }, function(committed) {
@@ -1442,10 +1549,11 @@ function onNext(onFinish) {
   });
 }
 
-function weightedRandom(st, arr, wk) {
-  if (wk === undefined) wk = isWeekendNow(st);
-  var weights = arr.map(function(b){ return activeListOf(st, b, wk).length - activePosOf(st, b, wk); });
+// Weighted random over items; weightFn(item) -> weight. Heavier = more likely.
+function weightedRandom(arr, weightFn) {
+  var weights = arr.map(function(b){ return Math.max(0, weightFn(b)); });
   var total   = weights.reduce(function(a, b){ return a + b; }, 0);
+  if (total <= 0) return arr[Math.floor(Math.random() * arr.length)];
   var rand    = Math.random() * total;
   for (var i = 0; i < arr.length; i++) {
     rand -= weights[i];
@@ -1459,17 +1567,8 @@ function onUndo(onFinish) {
     if (!st.hist.length) return false;
     var last = st.hist[st.hist.length - 1];
     var wasWk = !!last.wk;                       // rewind the pool it came from
-    var list = activeListOf(st, last.set, wasWk);
-    var cur  = activePosOf(st, last.set, wasWk);
-    if (list) {
-      if (last.numIdx !== undefined && cur === last.numIdx + 1) {
-        setActivePos(st, last.set, wasWk, last.numIdx);
-      } else {
-        var ei = cur - 1;
-        if (ei >= 0 && list[ei] === last.num) setActivePos(st, last.set, wasWk, ei);
-      }
-    }
-    st.hist.pop();
+    setActivePos(st, last.set, wasWk, Math.max(0, activePosOf(st, last.set, wasWk) - 1));
+    st.hist.pop();                               // popping the log un-calls it
     return st;
   }, function(committed) {
     if (committed) showToast("Last call undone");
@@ -1547,7 +1646,7 @@ function refreshUI() {
     dash.style.display = "none";
     chipLabel.textContent = "(All-Time)";
     var _wk0 = isWeekendNow(state);
-    var allRem = BRANDS.reduce(function(a, s){ return a + (activeListOf(state, s, _wk0).length - activePosOf(state, s, _wk0)); }, 0);
+    var allRem = BRANDS.reduce(function(a, s){ return a + (activeListOf(state, s, _wk0).filter(function(v){ return !isInactive(state, v); }).length - activePosOf(state, s, _wk0)); }, 0);
     if (allRem <= 0) {
       nextBtn.disabled = true;
       nextBtn.classList.add("done");
@@ -1664,7 +1763,7 @@ function refreshUI() {
     groupEl.className = "brand-group";
 
     var gDone  = brands.reduce(function(a, s){ return a + activePosOf(state, s, _wkNow); }, 0);
-    var gTotal = brands.reduce(function(a, s){ return a + activeListOf(state, s, _wkNow).length; }, 0);
+    var gTotal = brands.reduce(function(a, s){ return a + activeListOf(state, s, _wkNow).filter(function(v){ return !isInactive(state, v); }).length; }, 0);
     var isCollapsed = state.collapsed && state.collapsed[fam.name];
 
     var header = document.createElement("div");
@@ -1684,7 +1783,7 @@ function refreshUI() {
     chipsEl.className = "brand-group-chips" + (isCollapsed ? " collapsed" : "");
 
     brands.forEach(function(s) {
-      var total   = activeListOf(state, s, _wkNow).length;
+      var total   = activeListOf(state, s, _wkNow).filter(function(v){ return !isInactive(state, v); }).length;
       var current = activePosOf(state, s, _wkNow);
       var isDone  = current >= total && total > 0;
       var chip    = document.createElement("div");
@@ -1819,18 +1918,43 @@ function applyTheme(mode) {
 }
 
 // ---- Toast ------------------------------------------------------------------
-function showToast(msg) {
+// Toasts: small, colour-coded, at the top so they never cover the buttons you're
+// tapping, and tap-to-dismiss. The kind is inferred from the message when the
+// caller doesn't say: red for problems, green for saves/adds, blue otherwise.
+function toastKind(msg) {
+  if (/can't|cannot|couldn't|error|wrong|not added|not changed|refused|denied|already|invalid|too large|no such|must be/i.test(msg)) return "err";
+  if (/added|saved|updated|removed|deleted|reset|copied|done|changed|undone|undid|cleared|restored|nudged|shuffled/i.test(msg)) return "ok";
+  return "info";
+}
+function showToast(msg, kind) {
+  kind = kind || toastKind(msg);
   var t = document.getElementById("_toast");
   if (!t) {
     t = document.createElement("div");
     t.id = "_toast";
-    t.style.cssText = "position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:#1e212b;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;transition:opacity 0.3s;pointer-events:none;";
+    t.style.cssText = "position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:92%;display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,0.35);z-index:9999;transition:opacity 0.18s;pointer-events:auto;cursor:pointer;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+    t.onclick = function(){ dismissToast(t); };
     document.body.appendChild(t);
   }
-  t.textContent = msg;
+  clearTimeout(t._hideTimer);
+  t.style.display = "flex";
+  var theme = kind === "err" ? { bg: "rgba(127,29,29,0.95)", bd: "rgba(239,68,68,0.6)", fg: "#fecaca", ic: "\u26A0" }
+            : kind === "ok"  ? { bg: "rgba(6,78,59,0.95)",   bd: "rgba(16,185,129,0.6)", fg: "#a7f3d0", ic: "\u2713" }
+            :                  { bg: "rgba(30,41,59,0.95)",  bd: "rgba(148,163,184,0.4)", fg: "#e2e8f0", ic: "\u2139" };
+  t.style.background = theme.bg; t.style.borderColor = theme.bd; t.style.color = theme.fg;
+  t.innerHTML = "<span style='font-size:13px;opacity:0.9;'>" + theme.ic + "</span><span style='overflow:hidden;text-overflow:ellipsis;'>" + escapeHtml(msg) + "</span>";
   t.style.opacity = "1";
   clearTimeout(t._timer);
-  t._timer = setTimeout(function(){ t.style.opacity = "0"; }, 2500);
+  clearTimeout(t._hideTimer);
+  t._timer = setTimeout(function(){ dismissToast(t); }, kind === "err" ? 3200 : 1700);
+}
+
+// Tapping (or the timer expiring) fades it out, then actually removes it from
+// the layout so it can't linger as an invisible tap-blocker.
+function dismissToast(t) {
+  clearTimeout(t._timer); clearTimeout(t._hideTimer);
+  t.style.opacity = "0";
+  t._hideTimer = setTimeout(function(){ t.style.display = "none"; }, 180);
 }
 
 // ---- Events -----------------------------------------------------------------
@@ -1909,6 +2033,7 @@ document.getElementById("fwdBtn").onclick = function() {
 document.getElementById("resetBtn").onclick = function() {
   promptPasscode("Required to reset all call progress", function() {
     mutateShared(function(st) {
+      archiveDay(st);
       st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
       st.hist = [];
       st.cartonDone = {};
@@ -1931,6 +2056,7 @@ var _backupIdx = 0;
 var BACKUP_CHUNK_SIZE = 3000;
 
 function _renderBackupChunk() {
+  if (_copySheetPlain) return;
   var n = _backupChunks.length;
   document.getElementById("backupPartLabel").textContent = "Part " + (_backupIdx + 1) + " of " + n;
   // Marker line lets the parts be reassembled in the right order even if sent out of order.
@@ -1951,6 +2077,7 @@ function _copyCurrentBackupPart() {
 }
 
 document.getElementById("copyBackupBtn").onclick = function() {
+  _copySheetPlain = false;
   var backup = { version: NUMS_VERSION, exportedAt: new Date().toISOString(), nums: NUMS, state: state };
   var txt = JSON.stringify(backup);
   _backupChunks = [];
@@ -2031,6 +2158,7 @@ document.getElementById("importLabel").addEventListener("click", function(e) {
         st.wnums = imported.wnums;
         st.wpos = imported.wpos;
         st.cartonDone = imported.cartonDone;
+        st.inactive = imported.inactive;
         st.cartonNums = imported.cartonNums;
         st.cartonUpcs = imported.cartonUpcs;
         st.cartonOrder = imported.cartonOrder;
@@ -2065,6 +2193,7 @@ function checkAutoReset() {
   autoResetChecking = true;
   mutateShared(function(st) {
     if (st.autoResetDate === today) return false; // another device already reset for today
+    archiveDay(st);
     st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
     st.hist = [];
     st.cartonDone = {};
@@ -2271,7 +2400,10 @@ function initFirebase() {
       });
     } catch(e) {}
     startImageSync();
-    // If user already logged in, start sync now
+    // Shared data (lists, accounts, everything) is needed BEFORE anyone signs in -
+    // otherwise a new device on the login screen never learns about staff added
+    // elsewhere. Presence (who's online) still waits for login.
+    startStateSync();
     if (currentUser) startSync();
   } catch(e) {
     console.log("Firebase init error:", e.message);
@@ -2322,10 +2454,11 @@ setInterval(function() {
   }
 }, 60000);
 
-function startSync() {
-  if (!db) return;
+var _stateSyncStarted = false;
+function startStateSync() {
+  if (!db || _stateSyncStarted) return;
+  _stateSyncStarted = true;
   syncEnabled = true;
-
   try {
     // Listen for shared-state changes from Firebase.
     // IMPORTANT: this handler only writes locally - it never pushes back,
@@ -2339,7 +2472,17 @@ function startSync() {
       if (remote.rev !== undefined && state.rev !== undefined && remote.rev <= state.rev) return;
       applyShared(decodeShared(remote));
     });
+  } catch(e) { console.log("State sync error:", e.message); }
+}
 
+var _presenceSyncStarted = false;
+function startSync() {
+  if (!db) return;
+  startStateSync();
+  if (_presenceSyncStarted) { registerPresence(); return; }
+  _presenceSyncStarted = true;
+
+  try {
     db.ref("users").on("value", function(snapshot) {
       var users = snapshot.val();
       if (!users) return;
@@ -2631,6 +2774,96 @@ document.getElementById("usersPanel").onclick = function(e) {
 
 
 // ---- Cartons Directory Logic ------------------------------------------------
+// ---- History panel: customers served, by hour / by person / by product -------
+var historyDay = "today";
+function buildHistoryPanel() {
+  var el = document.getElementById("historyContent");
+  if (!el) return;
+  el.innerHTML = "";
+  var todayStr = localDateStr();
+  var days = (state.archive || []).slice().sort(function(a, b){ return a.date < b.date ? 1 : -1; });
+  var todaySum = summarizeHist(state.hist, todayStr);
+  var sel = historyDay === "today" ? todaySum : (days.filter(function(d){ return d.date === historyDay; })[0] || todaySum);
+  var isToday = sel === todaySum;
+
+  // Day picker
+  var picker = document.createElement("div");
+  picker.style.cssText = "display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;-webkit-overflow-scrolling:touch;";
+  function dayChip(label, key, total) {
+    var b = document.createElement("button");
+    var on = (key === "today" ? isToday : (!isToday && sel.date === key));
+    b.style.cssText = "flex:0 0 auto;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid " +
+      (on ? "rgba(168,85,247,0.7)" : "rgba(255,255,255,0.15)") + ";background:" + (on ? "rgba(168,85,247,0.25)" : "rgba(255,255,255,0.05)") + ";color:" + (on ? "#e9d5ff" : "#a0aec0") + ";";
+    b.innerHTML = label + " <span style='opacity:0.75;font-weight:500;'>" + total + "</span>";
+    b.onclick = function(){ historyDay = key; buildHistoryPanel(); };
+    return b;
+  }
+  picker.appendChild(dayChip("Today", "today", todaySum.total));
+  days.forEach(function(d){ if (d.date === todayStr) return; var dt = new Date(d.date + "T12:00:00"); picker.appendChild(dayChip(DAY_NAMES[dt.getDay()] + " " + (dt.getMonth() + 1) + "/" + dt.getDate(), d.date, d.total)); });
+  el.appendChild(picker);
+
+  // Headline
+  var head = document.createElement("div");
+  head.style.cssText = "background:#1e212b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.1);";
+  var users = Object.keys(sel.byUser).sort(function(a, b){ return sel.byUser[b] - sel.byUser[a]; });
+  head.innerHTML = "<div style='font-size:32px;font-weight:800;color:#fff;line-height:1;'>" + sel.total + "</div>" +
+    "<div style='color:#a0aec0;font-size:13px;margin-top:4px;'>customers served " + (isToday ? "today" : "on " + sel.date) + "</div>" +
+    (users.length ? "<div style='margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;'>" + users.map(function(u){
+      return "<span style='border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;background:" + rgbaStr(userColor(u), 0.15) + ";border:1px solid " + rgbaStr(userColor(u), 0.5) + ";color:" + userColor(u) + ";'>" + escapeHtml(u) + " " + sel.byUser[u] + "</span>";
+    }).join("") + "</div>" : "");
+  el.appendChild(head);
+
+  // By hour (bar chart)
+  var maxH = Math.max.apply(null, sel.byHour.concat([1]));
+  var hourCard = document.createElement("div");
+  hourCard.style.cssText = "background:#1e212b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.1);";
+  var bars = "";
+  for (var h = 0; h < 24; h++) {
+    var v = sel.byHour[h];
+    var pct = Math.round((v / maxH) * 100);
+    bars += "<div style='display:flex;align-items:center;gap:8px;margin:3px 0;'>" +
+      "<div style='width:52px;color:#a0aec0;font-size:11px;text-align:right;flex-shrink:0;'>" + fmtHour(h) + "</div>" +
+      "<div style='flex:1;height:14px;background:rgba(255,255,255,0.05);border-radius:7px;overflow:hidden;'><div style='height:100%;width:" + pct + "%;background:linear-gradient(90deg,#a855f7,#6366f1);border-radius:7px;transition:width 300ms ease;'></div></div>" +
+      "<div style='width:26px;color:" + (v ? "#fff" : "#4a5568") + ";font-size:12px;font-weight:700;flex-shrink:0;'>" + v + "</div></div>";
+  }
+  hourCard.innerHTML = "<div style='color:#d8b4fe;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Customers by hour</div>" + bars;
+  el.appendChild(hourCard);
+
+  // By product
+  var cats = Object.keys(sel.byCat).sort(function(a, b){ return sel.byCat[b] - sel.byCat[a]; });
+  if (cats.length) {
+    var catCard = document.createElement("div");
+    catCard.style.cssText = "background:#1e212b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.1);";
+    catCard.innerHTML = "<div style='color:#d8b4fe;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>By product</div>" +
+      cats.map(function(c){ return "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);'><span style='color:" + colorOfFamily(familyNameOf(c)) + ";font-weight:600;font-size:13px;'>" + escapeHtml(c) + "</span><span style='color:#fff;font-weight:700;'>" + sel.byCat[c] + "</span></div>"; }).join("");
+    el.appendChild(catCard);
+  }
+
+  // Today's full log, newest first
+  if (isToday && state.hist.length) {
+    var logCard = document.createElement("div");
+    logCard.style.cssText = "background:#1e212b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.1);";
+    var rows = state.hist.slice().reverse().slice(0, 150).map(function(e) {
+      var t = e.ts ? new Date(e.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
+      return "<div style='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;'>" +
+        "<span style='color:#a0aec0;width:64px;flex-shrink:0;'>" + t + "</span>" +
+        "<span style='color:" + colorOfFamily(familyNameOf(e.set)) + ";font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escapeHtml(e.set) + "</span>" +
+        "<span style='color:#fff;font-family:ui-monospace,monospace;flex-shrink:0;'>" + escapeHtml(e.num) + "</span>" +
+        (e.user ? "<span style='color:" + userColor(e.user) + ";font-weight:700;flex-shrink:0;'>" + escapeHtml(e.user) + "</span>" : "") + "</div>";
+    }).join("");
+    logCard.innerHTML = "<div style='color:#d8b4fe;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;'>Full log" + (state.hist.length > 150 ? " (latest 150)" : "") + "</div>" + rows;
+    el.appendChild(logCard);
+  }
+  if (!sel.total) {
+    var none = document.createElement("div");
+    none.style.cssText = "color:#a0aec0;font-size:13px;text-align:center;padding:12px;";
+    none.textContent = "No customers recorded for this day.";
+    el.appendChild(none);
+  }
+}
+document.getElementById("historyBtn").onclick = function(){ historyDay = "today"; buildHistoryPanel(); document.getElementById("historyPanel").style.display = "flex"; };
+document.getElementById("historyClose").onclick = function(){ document.getElementById("historyPanel").style.display = "none"; };
+
 // Tick / untick a carton number as done (synced; shows who ticked it)
 function cartonToggle(cat, idx, num) {
   mutateShared(function(st) {
@@ -2639,6 +2872,19 @@ function cartonToggle(cat, idx, num) {
     if (!st.cartonDone[cat]) st.cartonDone[cat] = {};
     if (st.cartonDone[cat][idx]) delete st.cartonDone[cat][idx];
     else st.cartonDone[cat][idx] = currentUser || "\u2713";
+    return st;
+  }, function(c){ if (c) buildCartonsPanel(); });
+}
+// Opening a carton (tapping the row to view its barcode) marks it done -
+// idempotent, so re-opening an already-done one doesn't touch it or its
+// "done by" credit.
+function cartonMarkDone(cat, idx, num) {
+  mutateShared(function(st) {
+    var arr = st.cartonNums[cat];
+    if (!arr || arr[idx] !== num) return false;
+    if (!st.cartonDone[cat]) st.cartonDone[cat] = {};
+    if (st.cartonDone[cat][idx]) return false;   // already done - nothing to change
+    st.cartonDone[cat][idx] = currentUser || "\u2713";
     return st;
   }, function(c){ if (c) buildCartonsPanel(); });
 }
@@ -2704,12 +2950,12 @@ function buildCartonsPanel() {
       txt.style.cssText = "flex:1;min-width:0;cursor:pointer;";
       txt.innerHTML = "<div style='color:" + (who ? "#a7f3d0" : "#fff") + ";font-size:16px;font-weight:600;font-family:ui-monospace,monospace;" + (who ? "text-decoration:line-through;opacity:0.85;" : "") + "'>" + escapeHtml(num) + "</div>" +
         (who ? "<div style='font-size:11px;color:#6ee7b7;'>done by " + escapeHtml(who) + "</div>" : "");
-      txt.onclick = (function(c, n){ return function(){ openCartonBarcode(c, n); }; })(cat, num);
+      txt.onclick = (function(c, i, n){ return function(){ cartonMarkDone(c, i, n); openCartonBarcode(c, n); }; })(cat, idx, num);
 
       var bc = document.createElement("span");
       bc.style.cssText = "color:#fcd34d;font-size:12px;flex-shrink:0;cursor:pointer;";
       bc.textContent = "Barcode";
-      bc.onclick = (function(c, n){ return function(){ openCartonBarcode(c, n); }; })(cat, num);
+      bc.onclick = (function(c, i, n){ return function(){ cartonMarkDone(c, i, n); openCartonBarcode(c, n); }; })(cat, idx, num);
 
       row.appendChild(box); row.appendChild(txt); row.appendChild(bc);
       section.appendChild(row);
@@ -2989,7 +3235,7 @@ function catSetDayset(cat, ds) {
     if (st.order.indexOf(cat) === -1) return false;
     st.dayOf[cat] = (ds === "weekday" || ds === "weekend") ? ds : "always";
     return st;
-  }, function(c){ if (c) { showToast("Active days updated"); renderEditor(); } });
+  }, function(c){ if (c) renderEditor(); });
 }
 function weekendUpdate(patch, msg) {
   mutateShared(function(st) {
@@ -3019,6 +3265,22 @@ function weekendStepWeight(delta) {
 var DAYSET_LABELS = { always: "Every day", weekday: "Weekdays (throttled on weekends)", weekend: "Weekends only" };
 var DAYSET_SHORT  = { always: "Every day", weekday: "Weekday", weekend: "Weekend" };
 var DAYSET_COLORS = { always: "#64748b", weekday: "#3b82f6", weekend: "#a855f7" };
+
+// -- Active / inactive numbers (synced) --
+function numSetInactive(vals, inactive) {
+  markUndo(inactive ? "Deactivate number" : "Activate number");
+  mutateShared(function(st) {
+    var changed = 0;
+    vals.forEach(function(v) {
+      if (!v || v === "SCAN") return;
+      if (inactive && !st.inactive[v]) { st.inactive[v] = 1; changed++; }
+      if (!inactive && st.inactive[v]) { delete st.inactive[v]; changed++; }
+    });
+    return changed ? st : false;
+  }, function(c) {
+    if (c) { renderEditor(); showToast((inactive ? "Deactivated " : "Activated ") + vals.length + (vals.length === 1 ? " number" : " numbers"), "ok"); }
+  });
+}
 
 // -- Family mutations (synced) --
 function familyAdd(rawName, color, cb) {
@@ -3148,14 +3410,14 @@ function modeStepHour(id, field, delta) {
 }
 function modeStepShifts(id, delta) {
   var m = modeDefOf(id);
-  var v = Math.max(0, Math.min(12, m.shifts + delta));
+  var v = Math.max(0, Math.min(24, m.shifts + delta));
   modeUpdate(id, { shifts: v });
 }
 function modeSetShiftLength(id, hours) {
   var m = modeDefOf(id);
   var span = spanHours(m);
   var n = Math.round(span / hours);
-  n = Math.max(1, Math.min(12, n));
+  n = Math.max(1, Math.min(24, n));
   modeUpdate(id, { shifts: n }, "Set to " + n + " shift" + (n === 1 ? "" : "s"));
 }
 function modeAdd(rawName) {
@@ -3270,15 +3532,14 @@ function numAdd(sec, brand, text, randomize) {
     var arr = secNums(st, sec)[brand];
     if (!arr) return false;
     if (randomize) {
-      var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
-      var idx = pp + Math.floor(Math.random() * (arr.length - pp + 1));
+      var idx = Math.floor(Math.random() * (arr.length + 1));
       arr.splice(idx, 0, formatted);
     } else {
       arr.push(formatted);
     }
     return st;
   }, function(committed) {
-    if (committed) showToast(randomize ? "Added at a random spot" : "Added to " + brand);
+    if (committed) showToast(randomize ? "Added at a random spot" : "Added", "ok");
   });
 }
 
@@ -3303,9 +3564,14 @@ function numDelete(sec, brand, idx, expected) {
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr || idx >= arr.length || arr[idx] !== expected) return false;
+    var val = arr[idx];
     arr.splice(idx, 1);
-    // Keep the called-count consistent if a called number is removed
-    if (sec === "calls" && idx < st.pos[brand]) st.pos[brand]--;
+    // Keep the called-counts consistent if a called number is removed
+    if (sec === "calls") {
+      var cs = calledSetsOf(st);
+      if (isCalledIn(cs, brand, 0, idx, val)) st.pos[brand]  = Math.max(0, (st.pos[brand]  || 0) - 1);
+      if (isCalledIn(cs, brand, 1, idx, val)) st.wpos[brand] = Math.max(0, (st.wpos[brand] || 0) - 1);
+    }
     return st;
   }, function(committed) {
     if (committed) showToast("Number deleted");
@@ -3315,17 +3581,11 @@ function numDelete(sec, brand, idx, expected) {
 function numMove(sec, brand, idx, dir, expected) {
   markUndo("Move number");
   var j = idx + dir;
-  var p = sec === "calls" ? (state.pos[brand] || 0) : 0;
   if (j < 0 || j >= liveNums(sec)[brand].length) return;
-  // Moving across the called/pending line would change which numbers count
-  // as already called, so it is blocked to keep progress accurate.
-  if ((idx < p) !== (j < p)) { showToast("Can't move across the called line"); return; }
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     var jj = idx + dir;
     if (!arr || jj < 0 || jj >= arr.length || arr[idx] !== expected) return false;
-    var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
-    if ((idx < pp) !== (jj < pp)) return false;
     var t = arr[idx]; arr[idx] = arr[jj]; arr[jj] = t;
     return st;
   });
@@ -3426,9 +3686,7 @@ function numMoveTo(sec, brand, from, to, expected) {
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr || from >= arr.length || arr[from] !== expected) return false;
-    var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
     var t = Math.max(0, Math.min(arr.length - 1, to));
-    if ((from < pp) !== (t < pp)) return false; // can't cross the called line
     var item = arr.splice(from, 1)[0];
     arr.splice(t, 0, item);
     return st;
@@ -3442,18 +3700,24 @@ function numShuffle(sec, brand) {
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
     if (!arr) return false;
-    var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
-    var pending = arr.length - pp;
-    if (pending < 2) return false;
-    var swaps = pending >= 3 ? (2 + Math.floor(Math.random() * 2)) : 1; // 2-3 (or 1 if only 2 pending)
+    // Nudge only numbers that haven't been called yet; called ones stay put.
+    var cs = sec === "calls" ? calledSetsOf(st) : null;
+    var free = [];
+    for (var i0 = 0; i0 < arr.length; i0++) {
+      if (cs && (isCalledIn(cs, brand, 0, i0, arr[i0]) || isCalledIn(cs, brand, 1, i0, arr[i0]))) continue;
+      free.push(i0);
+    }
+    if (free.length < 2) return false;
+    var swaps = free.length >= 3 ? (2 + Math.floor(Math.random() * 2)) : 1;
     for (var k = 0; k < swaps; k++) {
-      var i = pp + Math.floor(Math.random() * (pending - 1));
-      var t = arr[i]; arr[i] = arr[i + 1]; arr[i + 1] = t;
+      var q = Math.floor(Math.random() * (free.length - 1));
+      var a = free[q], b = free[q + 1];
+      var t = arr[a]; arr[a] = arr[b]; arr[b] = t;
     }
     return st;
   }, function(c) {
     if (c) showToast("Sequence nudged");
-    else showToast("Need at least 2 pending numbers");
+    else showToast("Need at least 2 uncalled numbers");
   });
 }
 
@@ -3481,16 +3745,21 @@ function numShuffleAll() {
   var snap = snapshotOrder(); // capture BEFORE the shuffle
   mutateShared(function(st) {
     var touched = 0;
+    var csAll = calledSetsOf(st);
     st.order.forEach(function(brand) {
       var arr = st.nums[brand];
       if (!arr) return;
-      var pp = st.pos[brand] || 0;
-      var pending = arr.length - pp;
-      if (pending < 2) return;
-      var swaps = pending >= 3 ? (2 + Math.floor(Math.random() * 2)) : 1;
+      var free = [];
+      for (var i0 = 0; i0 < arr.length; i0++) {
+        if (isCalledIn(csAll, brand, 0, i0, arr[i0]) || isCalledIn(csAll, brand, 1, i0, arr[i0])) continue;
+        free.push(i0);
+      }
+      if (free.length < 2) return;
+      var swaps = free.length >= 3 ? (2 + Math.floor(Math.random() * 2)) : 1;
       for (var k = 0; k < swaps; k++) {
-        var i = pp + Math.floor(Math.random() * (pending - 1));
-        var t = arr[i]; arr[i] = arr[i + 1]; arr[i + 1] = t;
+        var q = Math.floor(Math.random() * (free.length - 1));
+        var a = free[q], b = free[q + 1];
+        var t = arr[a]; arr[a] = arr[b]; arr[b] = t;
       }
       touched++;
     });
@@ -3564,9 +3833,8 @@ function numAddBulk(sec, brand, text, randomize) {
     parts = fresh;
     if (!parts.length) return false;
     if (randomize) {
-      var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
       parts.forEach(function(n){
-        var idx = pp + Math.floor(Math.random() * (arr.length - pp + 1));
+        var idx = Math.floor(Math.random() * (arr.length + 1));
         arr.splice(idx, 0, n);
       });
     } else {
@@ -3590,13 +3858,20 @@ function numDeleteBulk(sec, brand, picks) {
     for (var i = 0; i < picks.length; i++) {
       if (picks[i].idx >= arr.length || arr[picks[i].idx] !== picks[i].val) return false;
     }
-    var pp = sec === "calls" ? (st.pos[brand] || 0) : 0;
-    var calledRemoved = 0;
+    var cs = sec === "calls" ? calledSetsOf(st) : null;
+    var removedMain = 0, removedWk = 0;
     idxs.forEach(function(ix) {
+      var v = arr[ix];
+      if (cs) {
+        if (isCalledIn(cs, brand, 0, ix, v)) removedMain++;
+        if (isCalledIn(cs, brand, 1, ix, v)) removedWk++;
+      }
       arr.splice(ix, 1);
-      if (ix < pp) calledRemoved++;
     });
-    if (sec === "calls" && calledRemoved) st.pos[brand] = Math.max(0, pp - calledRemoved);
+    if (sec === "calls") {
+      if (removedMain) st.pos[brand]  = Math.max(0, (st.pos[brand]  || 0) - removedMain);
+      if (removedWk)   st.wpos[brand] = Math.max(0, (st.wpos[brand] || 0) - removedWk);
+    }
     return st;
   }, function(c) {
     if (c) {
@@ -3630,6 +3905,38 @@ function promptBulk(title, cb) {
     if (v.trim()) cb(v, true);
   };
   document.getElementById("bulkModalCancel").onclick = function() { modal.style.display = "none"; };
+}
+
+// -- Copy lists as plain text (category name + its numbers) --
+function listAsText(sec, cat) {
+  var lines = [cat];
+  (liveNums(sec)[cat] || []).forEach(function(n){ lines.push(n); });
+  return lines.join("\n");
+}
+function allListsAsText() {
+  var out = [];
+  BRANDS.forEach(function(c) {
+    out.push(c);
+    (NUMS[c] || []).forEach(function(n){ out.push(n); });
+    var wl = (state.wnums && state.wnums[c]) || [];
+    if (wl.length) { out.push(c + " (weekend)"); wl.forEach(function(n){ out.push(n); }); }
+    out.push("");
+  });
+  return out.join("\n").trim();
+}
+// Reuse the backup modal as a generic "copy this text" sheet (single part, no marker)
+var _copySheetPlain = false;
+function showCopySheet(title, text) {
+  _copySheetPlain = true;
+  _backupChunks = [text];
+  _backupIdx = 0;
+  document.getElementById("backupPartLabel").textContent = title;
+  document.getElementById("backupChunk").value = text;
+  document.getElementById("backupPrev").disabled = true;
+  document.getElementById("backupNext").disabled = true;
+  document.getElementById("backupModal").style.display = "flex";
+  // try the clipboard straight away so one tap is usually enough
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); showToast("Copied to clipboard", "ok"); } } catch(e) {}
 }
 
 // -- Camera barcode scanner (html5-qrcode; HTTPS + user tap required) --
@@ -3777,6 +4084,14 @@ function renderEditor() {
       var shufRow = document.createElement("div");
       shufRow.style.cssText = "display:flex;gap:8px;margin-bottom:12px;";
 
+      var copyAllBtn = document.createElement("button");
+      copyAllBtn.className = "tool-btn";
+      copyAllBtn.style.width = "100%";
+      copyAllBtn.style.marginBottom = "8px";
+      copyAllBtn.innerHTML = "&#128203; Copy all lists as text";
+      copyAllBtn.onclick = function(){ showCopySheet("All lists", allListsAsText()); };
+      content.appendChild(copyAllBtn);
+
       var dupBtn = document.createElement("button");
       dupBtn.className = "tool-btn";
       dupBtn.style.width = "100%";
@@ -3830,9 +4145,11 @@ function renderEditor() {
       row.style.borderLeftColor = sec === "cartons" ? "#f59e0b" : familyColor(b);
       var countTxt;
       if (sec === "calls") {
-        countTxt = (state.pos[b] || 0) + "/" + ((state.nums[b] || []).length);
+        var offN = (state.nums[b] || []).filter(function(v){ return isInactive(state, v); }).length;
+        countTxt = (state.pos[b] || 0) + "/" + ((state.nums[b] || []).length - offN);
         var wn = (state.wnums && state.wnums[b] || []).length;
         if (wn) countTxt += " <span style='color:#c4b5fd;'>+" + wn + "wk</span>";
+        if (offN) countTxt += " <span style='color:#718096;'>" + offN + " off</span>";
       } else {
         countTxt = (nums[b] || []).length + " nums";
       }
@@ -4066,7 +4383,12 @@ function renderEditor() {
   }
 
   var arr = liveNums(sec2)[brand] || [];
-  var p = (sec2 === "calls" && editorListKind === "main") ? (state.pos[brand] || 0) : 0;
+  var p = 0;  // no more "called line": called-ness is per number, by value
+  var _cs = sec2 === "calls" ? calledSetsOf(state) : null;
+  function _isCalled(idx, num) {
+    if (!_cs) return false;
+    return isCalledIn(_cs, brand, 0, idx, num) || isCalledIn(_cs, brand, 1, idx, num);
+  }
   // While the weekend window is active, mark which weekday numbers were drawn
   var _wkPickSet = null;
   if (sec2 === "calls" && editorListKind === "main" && isWeekendNow(state)) {
@@ -4101,9 +4423,16 @@ function renderEditor() {
     promptBulk("Add numbers to " + brand, function(text, rand){ numAddBulk(sec2, brand, text, rand); });
   };
 
+  var copyBtn = document.createElement("button");
+  copyBtn.className = "tool-btn";
+  copyBtn.innerHTML = "&#128203; Copy";
+  copyBtn.title = "Copy this category's name and numbers as text";
+  copyBtn.onclick = function(){ showCopySheet(brand + (editorListKind === "weekend" ? " (weekend)" : ""), listAsText(sec2, brand)); };
+
   toolbar.appendChild(shuffleBtn);
   toolbar.appendChild(selectBtn);
   toolbar.appendChild(bulkBtn);
+  toolbar.appendChild(copyBtn);
   content.appendChild(toolbar);
 
   if (!arr.length) {
@@ -4116,10 +4445,11 @@ function renderEditor() {
   if (editorSelectMode) {
     // ---------- Select mode: tap rows to pick, delete from the footer ----------
     arr.forEach(function(num, idx) {
-      var called = idx < p;
+      var called = _isCalled(idx, num);
+      var off = isInactive(state, num);
       var isSel = editorSelected[idx] !== undefined;
       var row = document.createElement("div");
-      row.className = "edit-num-row" + (called ? " called" : "") + (isSel ? " selected" : "");
+      row.className = "edit-num-row" + (called ? " called" : "") + (off ? " inactive" : "") + (isSel ? " selected" : "");
 
       var box = document.createElement("div");
       box.className = "sel-box" + (isSel ? " on" : "");
@@ -4147,9 +4477,10 @@ function renderEditor() {
   } else {
     // ---------- Normal mode: drag handle + arrows + tap-to-edit + delete ----------
     arr.forEach(function(num, idx) {
-      var called = idx < p;
+      var called = _isCalled(idx, num);
+      var off = isInactive(state, num);
       var row = document.createElement("div");
-      row.className = "edit-num-row" + (called ? " called" : "");
+      row.className = "edit-num-row" + (called ? " called" : "") + (off ? " inactive" : "");
 
       var handle = document.createElement("div");
       handle.className = "drag-handle";
@@ -4163,13 +4494,13 @@ function renderEditor() {
       var upBtn = document.createElement("button");
       upBtn.className = "edit-mini-btn";
       upBtn.innerHTML = "&uarr;";
-      upBtn.disabled = (idx === 0) || ((idx < p) !== (idx - 1 < p));
+      upBtn.disabled = (idx === 0);
       upBtn.onclick = function(){ numMove(sec2, brand, idx, -1, num); };
 
       var downBtn = document.createElement("button");
       downBtn.className = "edit-mini-btn";
       downBtn.innerHTML = "&darr;";
-      downBtn.disabled = (idx === arr.length - 1) || ((idx < p) !== (idx + 1 < p));
+      downBtn.disabled = (idx === arr.length - 1);
       downBtn.onclick = function(){ numMove(sec2, brand, idx, 1, num); };
 
       var txt = document.createElement("div");
@@ -4199,11 +4530,20 @@ function renderEditor() {
         }
       };
 
+      // Active / inactive toggle (inactive numbers are never picked)
+      var actBtn = document.createElement("button");
+      actBtn.className = "edit-mini-btn act" + (off ? " off" : "");
+      actBtn.innerHTML = off ? "&#9711;" : "&#9679;";
+      actBtn.title = off ? "Inactive - tap to activate" : "Active - tap to deactivate";
+      actBtn.disabled = (num === "SCAN");
+      actBtn.onclick = function(){ numSetInactive([num], !off); };
+
       row.appendChild(handle);
       row.appendChild(idxEl);
       row.appendChild(upBtn);
       row.appendChild(downBtn);
       row.appendChild(txt);
+      row.appendChild(actBtn);
       row.appendChild(delBtn);
       content.appendChild(row);
     });
@@ -4241,6 +4581,30 @@ function renderEditor() {
     var n = Object.keys(editorSelected).length;
     var selBar = document.createElement("div");
     selBar.className = "edit-add-bar";
+
+    var selVals = Object.keys(editorSelected).map(function(k){ return editorSelected[k]; }).filter(function(v){ return v && v !== "SCAN"; });
+    var anyOff = selVals.some(function(v){ return isInactive(state, v); });
+    var anyOn  = selVals.some(function(v){ return !isInactive(state, v); });
+    if (selVals.length && sec2 === "calls") {
+      var actRow = document.createElement("div");
+      actRow.style.cssText = "display:flex;gap:8px;margin-bottom:8px;";
+      if (anyOn) {
+        var offBtn = document.createElement("button");
+        offBtn.className = "tool-btn"; offBtn.style.flex = "1";
+        offBtn.textContent = "Deactivate (" + selVals.filter(function(v){ return !isInactive(state, v); }).length + ")";
+        offBtn.onclick = function(){ numSetInactive(selVals, true); editorSelected = {}; editorSelectMode = false; };
+        actRow.appendChild(offBtn);
+      }
+      if (anyOff) {
+        var onBtn = document.createElement("button");
+        onBtn.className = "tool-btn"; onBtn.style.flex = "1";
+        onBtn.style.color = "#6ee7b7"; onBtn.style.borderColor = "rgba(16,185,129,0.4)";
+        onBtn.textContent = "Activate (" + selVals.filter(function(v){ return isInactive(state, v); }).length + ")";
+        onBtn.onclick = function(){ numSetInactive(selVals, false); editorSelected = {}; editorSelectMode = false; };
+        actRow.appendChild(onBtn);
+      }
+      footer.appendChild(actRow);
+    }
 
     var delSel = document.createElement("button");
     delSel.style.flex = "1";
