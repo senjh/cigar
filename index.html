@@ -31,7 +31,12 @@
   .panel-header h2 { margin: 0; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .panel-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
   .panel-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 9px 16px; border-radius: 10px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
-  .panel-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px calc(40px + env(safe-area-inset-bottom)); }
+  .panel-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; overscroll-behavior-y: contain; touch-action: pan-y; padding: 16px 16px calc(40px + env(safe-area-inset-bottom)); }
+  /* A fixed panel sits over the page; without this the page underneath keeps
+     scrolling when the panel's own list reaches its end (iOS scroll chaining). */
+  .app-panel { overscroll-behavior: contain; touch-action: none; }
+  .app-panel .panel-header, .app-panel .panel-footer { touch-action: none; }
+  body.panel-open { overflow: hidden; position: fixed; width: 100%; }
   .panel-inner { max-width: 600px; margin: 0 auto; }
   .panel-footer { flex-shrink: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #161925; border-top: 1px solid rgba(255,255,255,0.1); }
 
@@ -286,7 +291,9 @@
 <div id="loginScreen" style="display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:#0f111a;z-index:5000;justify-content:center;align-items:center;">
   <div style="background:#1e212b;border-radius:20px;padding:32px 24px;width:88%;max-width:340px;text-align:center;border:1px solid rgba(255,255,255,0.1);">
     <div style="font-size:28px;font-weight:800;color:#fff;margin-bottom:6px;">Sequencer</div>
-    <div style="font-size:14px;color:#a0aec0;margin-bottom:18px;">Sign in to continue</div>
+    <div style="font-size:13px;color:#a0aec0;margin-bottom:10px;">Sign in to continue</div>
+    <div style="color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Store</div>
+    <div id="loginStoreChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:16px;"></div>
     <div id="loginUserChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:14px;"></div>
     <input id="usernameInput" type="text" placeholder="Username" maxlength="20" autocapitalize="none" autocorrect="off"
       style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:16px;color:#fff;text-align:center;outline:none;box-sizing:border-box;margin-bottom:10px;">
@@ -307,7 +314,10 @@
       <button id="historyBtn" style="background:rgba(168,85,247,0.18);border:1px solid rgba(168,85,247,0.4);color:#d8b4fe;padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;">History</button>
     </div>
   </div>
-  <div class="mode-row"><div id="modeBtn" class="mode-badge">Mode: Full Day</div></div>
+  <div class="mode-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <div id="modeBtn" class="mode-badge">Mode: Full Day</div>
+    <div id="storeBadge" class="mode-badge" style="background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.5);color:#6ee7b7;">&#127978; <span id="storeLabel">Main Store</span></div>
+  </div>
 
   <div class="status-row">
     <div id="dayModeBadge" class="daymode wd"><span>Weekday</span><span class="sub"></span></div>
@@ -391,6 +401,17 @@
     <button id="specialClose" class="panel-btn">Close</button>
   </div>
   <div class="panel-body"><div id="specialContent" class="panel-inner"></div></div>
+</div>
+
+<!-- Store picker -->
+<div id="storePicker" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:6500;justify-content:center;align-items:flex-start;padding-top:calc(10vh + env(safe-area-inset-top));">
+  <div style="background:#1e212b;border-radius:20px;padding:22px;width:90%;max-width:360px;border:1px solid rgba(255,255,255,0.1);max-height:80vh;display:flex;flex-direction:column;">
+    <div style="color:#fff;font-size:16px;font-weight:700;text-align:center;margin-bottom:4px;">Choose a store</div>
+    <div style="color:#a0aec0;font-size:12px;text-align:center;margin-bottom:14px;">Each store has its own numbers, staff and progress.</div>
+    <div id="storePickerList" style="overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;margin-bottom:12px;"></div>
+    <button id="storeAddBtn" style="border:1px dashed rgba(59,130,246,0.5);background:rgba(59,130,246,0.08);color:#93c5fd;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;display:none;">+ New store</button>
+    <button id="storePickerCancel" style="border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>
+  </div>
 </div>
 
 <!-- History panel -->
@@ -617,7 +638,25 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
-var STORE = "seq-v5-" + NUMS_VERSION;
+// ---- Multi-store -------------------------------------------------------------
+// Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
+// is already live stays exactly where it is. Additional stores are namespaced
+// under stores/<id>/... and are completely independent: own numbers, own staff,
+// own progress, own pictures.
+var MAIN_STORE = "main";
+var STORE_ID = localStorage.getItem("seq-store") || MAIN_STORE;
+var STORES = {};                       // id -> { name }
+function storeName(id) {
+  id = id || STORE_ID;
+  if (STORES[id] && STORES[id].name) return STORES[id].name;
+  return id === MAIN_STORE ? "Main Store" : id;
+}
+function statePath()  { return STORE_ID === MAIN_STORE ? "state"  : "stores/" + STORE_ID + "/state"; }
+function usersPath()  { return STORE_ID === MAIN_STORE ? "users"  : "stores/" + STORE_ID + "/users"; }
+function imagesPath() { return STORE_ID === MAIN_STORE ? "images" : "stores/" + STORE_ID + "/images"; }
+function lsKey(base)  { return base + (STORE_ID === MAIN_STORE ? "" : "-" + STORE_ID); }
+
+var STORE = "seq-v5-" + NUMS_VERSION + (STORE_ID === MAIN_STORE ? "" : "-" + STORE_ID);
 
 var BRANDS = Object.keys(DEFAULT_NUMS);
 
@@ -1452,7 +1491,7 @@ function mutateShared(mutator, onDone) {
   var lastPre = null, lastHistLen = 0;
   if (db && syncEnabled) {
     try {
-      db.ref("state").transaction(function(remote) {
+      db.ref(statePath()).transaction(function(remote) {
         var working = remote ? decodeShared(remote) : normalizeShared(sharedSnapshot());
         if (undoLabel) { lastPre = snapshotEditable(working); lastHistLen = working.hist.length; }
         var result = mutator(working);
@@ -1917,6 +1956,37 @@ function applyTheme(mode) {
   if (hl) hl.style.color = t.text;
 }
 
+// ---- Body scroll lock --------------------------------------------------------
+// While a full-screen panel or modal is open the page behind must not scroll,
+// otherwise iOS hands the gesture to it and the panel "sticks" mid-swipe.
+var _lockedScrollY = 0;
+function anyOverlayOpen() {
+  var ids = ["editPanel", "specialPanel", "historyPanel", "usersPanel", "loginScreen",
+             "modalOverlay", "specialBarcodeModal", "inputModal", "bulkModal", "colorModal",
+             "familyPicker", "modePicker", "storePicker", "scanModal", "backupModal"];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el && el.style.display && el.style.display !== "none") return true;
+  }
+  return false;
+}
+function syncBodyLock() {
+  var open = anyOverlayOpen();
+  var locked = document.body.classList.contains("panel-open");
+  if (open && !locked) {
+    _lockedScrollY = window.scrollY || 0;
+    document.body.style.top = (-_lockedScrollY) + "px";
+    document.body.classList.add("panel-open");
+  } else if (!open && locked) {
+    document.body.classList.remove("panel-open");
+    document.body.style.top = "";
+    window.scrollTo(0, _lockedScrollY);
+  }
+}
+// Any tap can open or close something, so re-check just after the handlers run.
+document.addEventListener("click", function(){ setTimeout(syncBodyLock, 0); }, true);
+document.addEventListener("touchend", function(){ setTimeout(syncBodyLock, 0); }, true);
+
 // ---- Toast ------------------------------------------------------------------
 // Toasts: small, colour-coded, at the top so they never cover the buttons you're
 // tapping, and tap-to-dismiss. The kind is inferred from the message when the
@@ -2292,34 +2362,105 @@ var DEFAULT_CARTON_UPCS = {
   "Marlboro Men Shorts Cartons":      "02836124"
 };
 
+// ---- Store registry ----------------------------------------------------------
+function startStoreSync() {
+  if (!db) return;
+  try {
+    db.ref("storeList").on("value", function(snap) {
+      // Copy before touching it - never mutate a snapshot back into the database
+      var v = snap.val() || {};
+      STORES = {};
+      Object.keys(v).forEach(function(k){ STORES[k] = { name: (v[k] && v[k].name) || k }; });
+      if (!STORES[MAIN_STORE]) STORES[MAIN_STORE] = { name: "Main Store" };
+      try { localStorage.setItem("seq-storelist", JSON.stringify(STORES)); } catch(e) {}
+      renderStorePicker();
+      var lbl = document.getElementById("storeLabel");
+      if (lbl) lbl.textContent = storeName();
+    });
+  } catch(e) {}
+}
+try { STORES = JSON.parse(localStorage.getItem("seq-storelist") || "null") || { main: { name: "Main Store" } }; }
+catch(e) { STORES = { main: { name: "Main Store" } }; }
+
+// Switching stores swaps every data path, so reload for a clean slate.
+function switchStore(id) {
+  if (id === STORE_ID) { document.getElementById("storePicker").style.display = "none"; return; }
+  localStorage.setItem("seq-store", id);
+  location.reload();
+}
+
+// A new store inherits the STRUCTURE of this one - same categories, families,
+// colours, barcodes, schedules and carton categories - but starts with every
+// phone list empty, its own staff, and clean progress.
+function blankStoreSeed() {
+  var base = normalizeShared(sharedSnapshot());
+  base.order.forEach(function(c){ base.nums[c] = []; base.wnums[c] = []; base.pos[c] = 0; base.wpos[c] = 0; });
+  base.cartonOrder.forEach(function(c){ base.cartonNums[c] = []; });
+  base.hist = []; base.cartonDone = {}; base.inactive = {}; base.archive = [];
+  base.accounts = [];            // normalizeShared re-seeds the sen/1212 operator
+  base.masterPin = "";
+  base.rev = 1;
+  var out = normalizeShared(base);
+  // Belt and braces: nothing may carry a phone number across.
+  out.order.forEach(function(c){ out.nums[c] = []; out.wnums[c] = []; });
+  out.cartonOrder.forEach(function(c){ out.cartonNums[c] = []; });
+  return out;
+}
+
+function storeAdd(name) {
+  name = String(name || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 28);
+  if (!name) { showToast("Enter a store name"); return; }
+  if (!db) { showToast("Need a connection to create a store"); return; }
+  var id = "s" + Date.now().toString(36);
+  var seed = encodeShared(blankStoreSeed());
+  try {
+    // Write the store's starting data FIRST, so it can never be filled in by
+    // the generic seeder (which would copy this store's numbers across).
+    db.ref("stores/" + id + "/state").set(seed, function(err) {
+      if (err) { showToast("Couldn't create the store"); return; }
+      db.ref("storeList/" + id).set({ name: name });
+      showToast("Store created", "ok");
+      promptChoice("\"" + name + "\" is ready \u2014 same categories, no numbers yet", [
+        { label: "Switch to it now", value: "go", color: "#10b981" },
+        { label: "Stay here", value: null, color: "#64748b" }
+      ], function(v){ if (v === "go") switchStore(id); });
+    });
+  } catch(e) { showToast("Couldn't create the store"); }
+}
+function storeRename(id, name) {
+  name = String(name || "").replace(/[.#$\[\]\/]/g, "").trim().slice(0, 28);
+  if (!name || !db) return;
+  try { db.ref("storeList/" + id).set({ name: name }); showToast("Store renamed", "ok"); } catch(e) {}
+}
+
 // ---- Product images ----------------------------------------------------------
 // Pictures live in their OWN Firebase node, never inside the main state payload.
 // That matters: the main state is rewritten on every generate/undo, so putting
 // image data in it would make every tap slow. Here they load once and cache.
 var PRODUCT_IMG = {};
-try { PRODUCT_IMG = JSON.parse(localStorage.getItem("seq-images") || "{}"); } catch(e) { PRODUCT_IMG = {}; }
+try { PRODUCT_IMG = JSON.parse(localStorage.getItem(lsKey("seq-images")) || "{}"); } catch(e) { PRODUCT_IMG = {}; }
 function imgKey(cat) { return "k" + hashStr(String(cat)); }
 function imgOf(cat) { return PRODUCT_IMG[imgKey(cat)] || null; }
-function cacheImages() { try { localStorage.setItem("seq-images", JSON.stringify(PRODUCT_IMG)); } catch(e) {} }
+function cacheImages() { try { localStorage.setItem(lsKey("seq-images"), JSON.stringify(PRODUCT_IMG)); } catch(e) {} }
 
 function imgSet(cat, dataUrl) {
   PRODUCT_IMG[imgKey(cat)] = dataUrl;
   cacheImages();
-  if (db) { try { db.ref("images/" + imgKey(cat)).set(dataUrl); } catch(e) {} }
+  if (db) { try { db.ref(imagesPath() + "/" + imgKey(cat)).set(dataUrl); } catch(e) {} }
   refreshUI(); if (isEditorOpen()) renderEditor();
   showToast("Picture saved");
 }
 function imgClear(cat) {
   delete PRODUCT_IMG[imgKey(cat)];
   cacheImages();
-  if (db) { try { db.ref("images/" + imgKey(cat)).remove(); } catch(e) {} }
+  if (db) { try { db.ref(imagesPath() + "/" + imgKey(cat)).remove(); } catch(e) {} }
   refreshUI(); if (isEditorOpen()) renderEditor();
   showToast("Picture removed");
 }
 function startImageSync() {
   if (!db) return;
   try {
-    db.ref("images").on("value", function(snap) {
+    db.ref(imagesPath()).on("value", function(snap) {
       var v = snap.val() || {};
       PRODUCT_IMG = v; cacheImages();
       refreshUI(); if (isEditorOpen()) renderEditor();
@@ -2399,6 +2540,7 @@ function initFirebase() {
         if (dot) dot.classList.toggle("connected", !!snap.val());
       });
     } catch(e) {}
+    startStoreSync();
     startImageSync();
     // Shared data (lists, accounts, everything) is needed BEFORE anyone signs in -
     // otherwise a new device on the login screen never learns about staff added
@@ -2422,7 +2564,7 @@ function loginUser(name) {
   if (!currentUser) return;
 
   // Remember this device's session (set in attemptLogin/tryAutoLogin)
-  localStorage.setItem("seq-username", currentUser);
+  localStorage.setItem(lsKey("seq-username"), currentUser);
 
   // Register as active user
   registerPresence();
@@ -2441,7 +2583,7 @@ function loginUser(name) {
 function registerPresence() {
   if (!db || !currentUser) return;
   try {
-    var userRef = db.ref("users/" + currentUser);
+    var userRef = db.ref(usersPath() + "/" + currentUser);
     userRef.update({ name: currentUser, lastSeen: Date.now(), online: true });
     userRef.onDisconnect().update({ online: false, lastSeen: Date.now() });
   } catch(e) {}
@@ -2450,7 +2592,7 @@ function registerPresence() {
 // Heartbeat: keep lastSeen fresh while the app is open
 setInterval(function() {
   if (db && currentUser) {
-    try { db.ref("users/" + currentUser).update({ lastSeen: Date.now(), online: true }); } catch(e) {}
+    try { db.ref(usersPath() + "/" + currentUser).update({ lastSeen: Date.now(), online: true }); } catch(e) {}
   }
 }, 60000);
 
@@ -2463,7 +2605,7 @@ function startStateSync() {
     // Listen for shared-state changes from Firebase.
     // IMPORTANT: this handler only writes locally - it never pushes back,
     // which prevents the echo loop / clobbering that caused conflicts before.
-    db.ref("state").on("value", function(snapshot) {
+    db.ref(statePath()).on("value", function(snapshot) {
       var remote = snapshot.val();
       if (!remote) { seedRemote(); return; }
       // Ignore stale snapshots AND the echo of our own last write (same rev) -
@@ -2483,7 +2625,7 @@ function startSync() {
   _presenceSyncStarted = true;
 
   try {
-    db.ref("users").on("value", function(snapshot) {
+    db.ref(usersPath()).on("value", function(snapshot) {
       var users = snapshot.val();
       if (!users) return;
       window._presenceCache = Object.values(users);
@@ -2513,9 +2655,11 @@ function startSync() {
 function seedRemote() {
   if (!db) return;
   try {
-    db.ref("state").transaction(function(remote) {
+    db.ref(statePath()).transaction(function(remote) {
       if (remote) return; // someone else seeded first - keep theirs
-      var seed = normalizeShared(sharedSnapshot());
+      // Only the original store seeds from local data. Any other store that
+      // somehow arrives empty starts blank rather than inheriting numbers.
+      var seed = STORE_ID === MAIN_STORE ? normalizeShared(sharedSnapshot()) : blankStoreSeed();
       seed.rev = (seed.rev || 0) + 1;
       return encodeShared(seed);
     });
@@ -2527,9 +2671,9 @@ function seedRemote() {
 // operator changes someone's password their saved session stops working.
 function sessionFp(name, pin) { return String(hashStr(String(name).toLowerCase() + "|" + pin)); }
 function saveSession(name, pin) {
-  try { localStorage.setItem("seq-session", JSON.stringify({ name: name, fp: sessionFp(name, pin) })); } catch(e) {}
+  try { localStorage.setItem(lsKey("seq-session"), JSON.stringify({ name: name, fp: sessionFp(name, pin) })); } catch(e) {}
 }
-function clearSession() { try { localStorage.removeItem("seq-session"); } catch(e) {} }
+function clearSession() { try { localStorage.removeItem(lsKey("seq-session")); } catch(e) {} }
 
 function attemptLogin(name, pin) {
   var err = document.getElementById("loginError");
@@ -2551,6 +2695,61 @@ function operatorName() {
   var m = (state.accounts || []).filter(function(a){ return a.role === "master"; })[0];
   return m ? m.name : "the operator";
 }
+
+// Store chips on the login screen
+function renderStorePicker() {
+  var box = document.getElementById("loginStoreChips");
+  if (box) {
+    box.innerHTML = "";
+    Object.keys(STORES).forEach(function(id) {
+      var b = document.createElement("button");
+      var on = id === STORE_ID;
+      b.style.cssText = "border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid " +
+        (on ? "rgba(16,185,129,0.7)" : "rgba(255,255,255,0.18)") + ";background:" + (on ? "rgba(16,185,129,0.22)" : "rgba(255,255,255,0.05)") +
+        ";color:" + (on ? "#6ee7b7" : "#a0aec0") + ";";
+      b.textContent = (STORES[id] && STORES[id].name) || id;
+      b.onclick = function(){ switchStore(id); };
+      box.appendChild(b);
+    });
+  }
+  var lbl = document.getElementById("storeLabel");
+  if (lbl) lbl.textContent = storeName();
+}
+
+// The in-app store badge opens the same list (plus "+ New store" for the operator)
+function openStorePicker() {
+  var modal = document.getElementById("storePicker");
+  var list = document.getElementById("storePickerList");
+  list.innerHTML = "";
+  Object.keys(STORES).forEach(function(id) {
+    var row = document.createElement("button");
+    var on = id === STORE_ID;
+    row.style.cssText = "width:100%;display:flex;align-items:center;gap:10px;padding:13px;margin-bottom:8px;border-radius:12px;cursor:pointer;text-align:left;border:1px solid " +
+      (on ? "rgba(16,185,129,0.7)" : "rgba(255,255,255,0.15)") + ";background:" + (on ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.05)") + ";color:#fff;font-size:15px;font-weight:600;";
+    row.innerHTML = "<span>&#127978;</span><span style='flex:1;min-width:0;'>" + escapeHtml((STORES[id] && STORES[id].name) || id) + (on ? " \u2713" : "") + "</span>";
+    row.onclick = function(){ switchStore(id); };
+    list.appendChild(row);
+
+    if (isMaster() && on) {
+      var ren = document.createElement("button");
+      ren.className = "tool-btn";
+      ren.style.cssText += "width:100%;margin-bottom:10px;";
+      ren.textContent = "Rename this store";
+      ren.onclick = function(){ modal.style.display = "none"; promptInput("Rename store", storeName(id), function(v){ storeRename(id, v); }, "text"); };
+      list.appendChild(ren);
+    }
+  });
+  var addBtn = document.getElementById("storeAddBtn");
+  addBtn.style.display = isMaster() ? "block" : "none";
+  addBtn.onclick = function() {
+    modal.style.display = "none";
+    promptInput("New store name", "", function(nm){ storeAdd(nm); }, "text");
+  };
+  modal.style.display = "flex";
+}
+document.getElementById("storeBadge").onclick = openStorePicker;
+document.getElementById("storePickerCancel").onclick = function(){ document.getElementById("storePicker").style.display = "none"; };
+document.getElementById("storePicker").onclick = function(e){ if (e.target === this) this.style.display = "none"; };
 
 // Rebuild the tap-to-pick staff list on the login screen
 function renderLoginChips() {
@@ -2576,7 +2775,7 @@ var _autoLoginTried = false;
 function tryAutoLogin() {
   if (currentUser) return;
   var raw = null;
-  try { raw = JSON.parse(localStorage.getItem("seq-session") || "null"); } catch(e) {}
+  try { raw = JSON.parse(localStorage.getItem(lsKey("seq-session")) || "null"); } catch(e) {}
   renderLoginChips();
   if (!raw || !raw.name) return;
   var acct = accountFor(raw.name);
@@ -2627,15 +2826,16 @@ document.getElementById("usernameInput").onkeydown = function(e) {
 // Auto-login if name saved
 // Try the saved session once the local data is ready, and again after the first
 // sync lands (accounts may only exist on the server).
+renderStorePicker();
 renderLoginChips();
 tryAutoLogin();
 setTimeout(function(){ _autoLoginTried = true; tryAutoLogin(); }, 1500);
 
 // Sign out (back to the login screen)
 function signOut() {
-  try { if (db && currentUser) db.ref("users/" + currentUser).update({ online: false, lastSeen: Date.now() }); } catch(e) {}
+  try { if (db && currentUser) db.ref(usersPath() + "/" + currentUser).update({ online: false, lastSeen: Date.now() }); } catch(e) {}
   currentUser = ""; masterUnlocked = false; editorUnlocked = false;
-  localStorage.removeItem("seq-username");
+  localStorage.removeItem(lsKey("seq-username"));
   clearSession();
   var pf = document.getElementById("pinInput"); if (pf) pf.value = "";
   renderLoginChips();
