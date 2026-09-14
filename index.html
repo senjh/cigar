@@ -1197,8 +1197,10 @@ function shiftStats(st) {
   var info = shiftInfo(st.mode, st);
   if (!info.gated) return { gated: false, done: 0, total: 0, remaining: 0, closed: false };
   if (info.closed) return { gated: true, done: 0, total: 0, remaining: 0, closed: true };
+  var today = localDateStr();
   var done = (st.hist || []).filter(function(e){
-    return e.shiftIdx === info.idx && e.shiftMode === st.mode;
+    if (e.shiftIdx !== info.idx || e.shiftMode !== st.mode) return false;
+    return !e.ts || localDateStr(new Date(e.ts)) === today;   // never count older days
   }).length;
   var mult = isWeekendNow(st) ? weekendCfg(st).quota : 1;
   var total = Math.max(1, Math.ceil((totalNumsOf(st) / info.count) * mult));
@@ -1348,6 +1350,43 @@ function normalizeShared(st) {
     if (v !== "weekday" && v !== "weekend") st.dayOf[n] = "always";
   });
   Object.keys(st.dayOf).forEach(function(n){ if (st.order.indexOf(n) === -1) delete st.dayOf[n]; });
+
+  // ---- Self-heal the call log -------------------------------------------------
+  // The log is meant to hold TODAY's calls only; earlier days live in the
+  // archive. If a nightly reset was ever missed, stale entries would inflate the
+  // shift counter AND make their numbers look "already called" - which is
+  // exactly the "almost done straight after a reset" symptom. Roll any old days
+  // into the archive, drop them from the log, and rebuild the per-list counts.
+  // (Skipped while a continuous weekend is deliberately spanning midnight.)
+  var _contWeekend = (st.weekend && st.weekend.nightlyReset === false) && isWeekendNow(st);
+  if (!_contWeekend && st.hist.length) {
+    var _today = localDateStr(), _keep = [], _byDay = {}, _dropped = 0;
+    st.hist.forEach(function(e) {
+      var d = (e && e.ts) ? localDateStr(new Date(e.ts)) : null;
+      if (d === _today) { _keep.push(e); return; }
+      _dropped++;
+      if (d) (_byDay[d] = _byDay[d] || []).push(e);   // undated entries can't be attributed
+    });
+    if (_dropped) {
+      Object.keys(_byDay).forEach(function(d) {
+        var sum = summarizeHist(_byDay[d], d);
+        var prev = st.archive.filter(function(x){ return x.date === d; })[0];
+        if (prev && prev.total >= sum.total) return;   // keep the fuller record
+        st.archive = st.archive.filter(function(x){ return x.date !== d; });
+        st.archive.push(sum);
+      });
+      st.archive.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
+      st.archive = st.archive.slice(-30);
+      st.hist = _keep;
+      // Rebuild the called-counts from what's actually left in the log
+      st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
+      st.hist.forEach(function(e){
+        if (st.pos[e.set] === undefined) return;
+        if (e.wk) st.wpos[e.set] = (st.wpos[e.set] || 0) + 1;
+        else      st.pos[e.set]  = (st.pos[e.set]  || 0) + 1;
+      });
+    }
+  }
 
   st.rev = st.rev || 0;
   return st;
@@ -2107,6 +2146,7 @@ document.getElementById("resetBtn").onclick = function() {
       st.order.forEach(function(b){ st.pos[b] = 0; st.wpos[b] = 0; });
       st.hist = [];
       st.cartonDone = {};
+      st.autoResetDate = localDateStr();   // keep the nightly reset in step
       return st;
     }, function() {
       state.ptr = -1;
