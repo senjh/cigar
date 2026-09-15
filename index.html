@@ -311,6 +311,7 @@
     <button id="loginBtn" style="width:100%;background:#3b82f6;border:none;border-radius:12px;padding:14px;font-size:17px;font-weight:600;color:#fff;cursor:pointer;">Sign in</button>
     <div id="loginError" style="color:#ef4444;font-size:13px;margin-top:8px;min-height:16px;"></div>
     <div style="color:#64748b;font-size:11px;margin-top:10px;">You'll stay signed in on this device.</div>
+    <div id="buildStamp" style="color:#475569;font-size:10px;margin-top:6px;font-family:ui-monospace,monospace;"></div>
   </div>
 </div>
 
@@ -647,6 +648,7 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
+var BUILD = "2026-09-14 \u00b7 toggle-fix";   // shown on the login screen + Staff panel
 // ---- Multi-store -------------------------------------------------------------
 // Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
 // is already live stays exactly where it is. Additional stores are namespaced
@@ -1115,7 +1117,22 @@ var state = JSON.parse(localStorage.getItem(STORE)) || {
   mode: "blocks", pos: {}, hist: [], ptr: -1, collapsed: {}, logFilter: "all"
 };
 
-function save() { localStorage.setItem(STORE, JSON.stringify(state)); }
+function save() {
+  // The undo stacks are throwaway working data (tens of KB each) - keeping them
+  // in memory only keeps the saved blob small. And a storage failure must never
+  // escape: it used to throw out of the sync callback, so the screen stopped
+  // redrawing and every button looked dead.
+  var keepE = state.editUndo, keepS = state.shuffleUndo;
+  try {
+    delete state.editUndo; delete state.shuffleUndo;
+    localStorage.setItem(STORE, JSON.stringify(state));
+  } catch (e) {
+    try { localStorage.removeItem(STORE); } catch (e2) {}
+  } finally {
+    if (keepE) state.editUndo = keepE;
+    if (keepS) state.shuffleUndo = keepS;
+  }
+}
 
 function bootstrap() {
   var norm = normalizeShared({
@@ -2897,6 +2914,8 @@ document.getElementById("usernameInput").onkeydown = function(e) {
 // Auto-login if name saved
 // Try the saved session once the local data is ready, and again after the first
 // sync lands (accounts may only exist on the server).
+var _bs = document.getElementById("buildStamp");
+if (_bs) _bs.textContent = "build " + BUILD;
 renderStorePicker();
 renderLoginChips();
 tryAutoLogin();
@@ -3014,6 +3033,11 @@ function refreshUsersPanel() {
   so.textContent = "Sign out";
   so.onclick = signOut;
   el.appendChild(so);
+
+  var bs = document.createElement("div");
+  bs.style.cssText = "color:#475569;font-size:10px;text-align:center;margin-top:10px;font-family:ui-monospace,monospace;";
+  bs.textContent = "build " + BUILD + " \u00b7 store: " + storeName();
+  el.appendChild(bs);
 }
 
 function userActions(name, role, hasAcct, isMe, master) {
@@ -3556,7 +3580,11 @@ function pruneInactive(st) {
 function numSetInactive(vals, inactive) {
   markUndo(inactive ? "Deactivate number" : "Activate number");
   var usable = (vals || []).filter(function(v){ return v && v !== "SCAN"; });
-  if (!usable.length) { showToast("SCAN entries can't be switched off \u2014 delete one instead"); return; }
+  if (!usable.length) {
+    _pendingUndoLabel = null;   // don't leave the label armed for the next action
+    showToast("SCAN entries can't be switched off \u2014 delete one instead");
+    return;
+  }
   mutateShared(function(st) {
     // Set the wanted state outright. This used to abort when the synced copy
     // already agreed, and an abort skipped the re-render - so if the phone and
