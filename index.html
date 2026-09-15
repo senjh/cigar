@@ -1408,6 +1408,8 @@ function normalizeShared(st) {
     }
   }
 
+  pruneInactive(st);
+
   st.rev = st.rev || 0;
   return st;
 }
@@ -3526,6 +3528,21 @@ var DAYSET_LABELS = { always: "Every day", weekday: "Weekdays (throttled on week
 var DAYSET_SHORT  = { always: "Every day", weekday: "Weekday", weekend: "Weekend" };
 var DAYSET_COLORS = { always: "#64748b", weekday: "#3b82f6", weekend: "#a855f7" };
 
+// Drop "inactive" flags for numbers that are no longer in any list. Without
+// this a deleted number keeps its flag, and re-adding it later would bring it
+// back silently switched off.
+function pruneInactive(st) {
+  if (!st.inactive) { st.inactive = {}; return; }
+  var keys = Object.keys(st.inactive);
+  if (!keys.length) return;
+  var live = {};
+  (st.order || []).forEach(function(b) {
+    (st.nums[b] || []).forEach(function(v){ live[v] = 1; });
+    ((st.wnums || {})[b] || []).forEach(function(v){ live[v] = 1; });
+  });
+  keys.forEach(function(k){ if (!live[k]) delete st.inactive[k]; });
+}
+
 // -- Active / inactive numbers (synced) --
 function numSetInactive(vals, inactive) {
   markUndo(inactive ? "Deactivate number" : "Activate number");
@@ -3813,28 +3830,37 @@ function numEdit(sec, brand, idx, expected, text) {
   mutateShared(function(st) {
     if (findNumberOwner(st, formatted, skipSelf)) return false;
     var arr = secNums(st, sec)[brand];
-    if (!arr || idx >= arr.length || arr[idx] !== expected) return false;
-    arr[idx] = formatted;
+    var i = (arr && arr[idx] === expected) ? idx : (arr ? arr.indexOf(expected) : -1);
+    if (!arr || i < 0) return false;
+    var wasOff = !!st.inactive[arr[i]];
+    arr[i] = formatted;
+    if (wasOff) { st.inactive[formatted] = 1; }   // keep it switched off after an edit
+    pruneInactive(st);
     return st;
-  });
+  }, function(c){ if (!c) { showToast("That number changed elsewhere \u2014 list refreshed"); renderEditor(); } });
 }
 
 function numDelete(sec, brand, idx, expected) {
   markUndo("Delete number");
   mutateShared(function(st) {
     var arr = secNums(st, sec)[brand];
-    if (!arr || idx >= arr.length || arr[idx] !== expected) return false;
-    var val = arr[idx];
-    arr.splice(idx, 1);
+    // The row may have shifted (another device edited, or the list re-sorted),
+    // so fall back to finding the value rather than refusing outright.
+    var i = (arr && arr[idx] === expected) ? idx : (arr ? arr.indexOf(expected) : -1);
+    if (!arr || i < 0) return false;
+    var val = arr[i];
+    arr.splice(i, 1);
     // Keep the called-counts consistent if a called number is removed
     if (sec === "calls") {
       var cs = calledSetsOf(st);
-      if (isCalledIn(cs, brand, 0, idx, val)) st.pos[brand]  = Math.max(0, (st.pos[brand]  || 0) - 1);
-      if (isCalledIn(cs, brand, 1, idx, val)) st.wpos[brand] = Math.max(0, (st.wpos[brand] || 0) - 1);
+      if (isCalledIn(cs, brand, 0, i, val)) st.pos[brand]  = Math.max(0, (st.pos[brand]  || 0) - 1);
+      if (isCalledIn(cs, brand, 1, i, val)) st.wpos[brand] = Math.max(0, (st.wpos[brand] || 0) - 1);
     }
+    pruneInactive(st);          // don't leave a stale "off" flag behind
     return st;
   }, function(committed) {
     if (committed) showToast("Number deleted");
+    else { showToast("That number is no longer there \u2014 list refreshed"); renderEditor(); }
   });
 }
 
@@ -3925,7 +3951,8 @@ function catDelete(sec, name) {
     order.splice(ix, 1);
     delete secNums(st, sec)[name];
     delete secUpcs(st, sec)[name];
-    if (sec === "calls") { delete st.pos[name]; delete st.familyOf[name]; }
+    if (sec === "calls") { delete st.pos[name]; delete st.wpos[name]; delete st.familyOf[name]; delete st.dayOf[name]; delete st.wnums[name]; }
+    pruneInactive(st);
     return st;
   }, function(committed) {
     if (committed) {
@@ -4132,6 +4159,7 @@ function numDeleteBulk(sec, brand, picks) {
       if (removedMain) st.pos[brand]  = Math.max(0, (st.pos[brand]  || 0) - removedMain);
       if (removedWk)   st.wpos[brand] = Math.max(0, (st.wpos[brand] || 0) - removedWk);
     }
+    pruneInactive(st);
     return st;
   }, function(c) {
     if (c) {
@@ -4776,7 +4804,8 @@ function renderEditor() {
 
       var delBtn = document.createElement("button");
       delBtn.className = "edit-mini-btn del";
-      var key = sec2 + "|" + brand + "|" + idx;
+      // keyed by value so a re-render or reorder can never arm the wrong row
+      var key = sec2 + "|" + brand + "|" + editorListKind + "|" + num;
       if (pendingDeleteKey === key) { delBtn.classList.add("confirm"); delBtn.innerHTML = "?"; }
       else { delBtn.innerHTML = "&times;"; }
       delBtn.onclick = function() {
