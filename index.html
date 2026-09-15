@@ -34,8 +34,7 @@
   .panel-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; overscroll-behavior-y: contain; touch-action: pan-y; padding: 16px 16px calc(40px + env(safe-area-inset-bottom)); }
   /* A fixed panel sits over the page; without this the page underneath keeps
      scrolling when the panel's own list reaches its end (iOS scroll chaining). */
-  .app-panel { overscroll-behavior: contain; touch-action: none; }
-  .app-panel .panel-header, .app-panel .panel-footer { touch-action: none; }
+  .app-panel { overscroll-behavior: contain; }
   body.panel-open { overflow: hidden; position: fixed; width: 100%; }
   .panel-inner { max-width: 600px; margin: 0 auto; }
   .panel-footer { flex-shrink: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: #161925; border-top: 1px solid rgba(255,255,255,0.1); }
@@ -210,15 +209,24 @@
   .edit-brand-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 13px 14px; background: #1e212b; border: 1px solid rgba(255,255,255,0.1); border-left-width: 4px; border-radius: 12px; margin-bottom: 8px; cursor: pointer; }
   .edit-brand-row:active { opacity: 0.7; }
   .edit-add-cat { border: 1px dashed rgba(59,130,246,0.5) !important; background: rgba(59,130,246,0.07); color: #93c5fd; justify-content: center; font-weight: 700; }
-  .edit-num-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1e212b; border: 1px solid rgba(255,255,255,0.1); border-left: 3px solid rgba(255,255,255,0.15); border-radius: 10px; margin-bottom: 6px; }
+  .edit-num-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #1e212b; border: 1px solid rgba(255,255,255,0.1); border-left: 3px solid rgba(255,255,255,0.15); border-radius: 10px; margin-bottom: 6px; }
   .edit-num-row.inactive .edit-num-text { text-decoration: line-through; opacity: 0.45; }
   .edit-num-row.inactive { border-style: dashed; }
   .edit-mini-btn.act { color: #10b981; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.08); }
   .edit-mini-btn.act.off { color: #718096; border-color: rgba(255,255,255,0.15); background: transparent; }
   .edit-num-row.called { border-left-color: #10b981; opacity: 0.65; }
-  .edit-idx { flex-shrink: 0; min-width: 22px; text-align: center; color: #718096; font-size: 11px; font-weight: 700; }
-  .edit-num-text { flex: 1; color: #fff; font-size: 15px; font-weight: 600; font-family: ui-monospace, monospace; cursor: pointer; padding: 6px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edit-idx { display: none; }   /* the number itself is the identifier - this column only stole room */
+  .edit-num-text { flex: 1 1 auto; color: #fff; font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; cursor: pointer; padding: 10px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .edit-mini-btn { width: 38px; height: 38px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.15); border-radius: 9px; background: rgba(255,255,255,0.07); color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  /* Row controls get full-size touch targets (iOS wants 44px) and the two
+     destructive-ish ones are separated so a near miss can't hit the wrong one. */
+  .edit-num-row .edit-mini-btn { width: 36px; height: 44px; font-size: 15px; }
+  .edit-num-row .edit-mini-btn.act { width: 44px; margin-left: 4px; }
+  .edit-num-row .edit-mini-btn.del { width: 44px; margin-left: 6px; }
+  .edit-num-row .drag-handle { width: 24px; }
+  /* Armed delete is unmistakable: solid red and it says what it will do */
+  .edit-mini-btn.del.confirm { width: auto !important; padding: 0 12px; background: #ef4444; color: #fff; font-weight: 800; font-size: 13px; border-color: #ef4444; }
+  .edit-num-row.arm-del { border-color: rgba(239,68,68,0.7); background: rgba(239,68,68,0.10); }
   .edit-mini-btn:disabled { opacity: 0.25; }
   .edit-mini-btn.del { color: #fca5a5; border-color: rgba(239,68,68,0.4); }
   .edit-mini-btn.del.confirm { background: #ef4444; color: #fff; }
@@ -4806,16 +4814,19 @@ function renderEditor() {
       delBtn.className = "edit-mini-btn del";
       // keyed by value so a re-render or reorder can never arm the wrong row
       var key = sec2 + "|" + brand + "|" + editorListKind + "|" + num;
-      if (pendingDeleteKey === key) { delBtn.classList.add("confirm"); delBtn.innerHTML = "?"; }
-      else { delBtn.innerHTML = "&times;"; }
+      if (pendingDeleteKey === key) {
+        delBtn.classList.add("confirm");
+        delBtn.innerHTML = "Delete?";
+        row.className += " arm-del";
+      } else { delBtn.innerHTML = "&times;"; }
       delBtn.onclick = function() {
         if (pendingDeleteKey === key) {
           clearTimeout(pendingDeleteTimer); pendingDeleteKey = null; numDelete(sec2, brand, idx, num);
         } else {
           pendingDeleteKey = key;
           clearTimeout(pendingDeleteTimer);
-          pendingDeleteTimer = setTimeout(function(){ pendingDeleteKey = null; renderEditor(); }, 3500);
-          renderEditor(); showToast("Tap again to delete");
+          pendingDeleteTimer = setTimeout(function(){ pendingDeleteKey = null; renderEditor(); }, 6000);
+          renderEditor();   // the row itself now shows "Delete?" - no need to shout
         }
       };
 
