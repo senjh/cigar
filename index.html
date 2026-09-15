@@ -1161,18 +1161,29 @@ function isInactive(st, val) { return !!((st || state).inactive || {})[val]; }
 // The slice of a list that belongs to the CURRENT time block. Lists are split
 // into as many equal chunks as the schedule has shifts; picks stay inside the
 // current chunk. Ungated schedules (no shifts) use the whole list.
-function chunkRangeOf(len, info) {
+function chunkRangeOf(len, info, cat) {
   if (!info || !info.gated || !info.count || info.idx == null || info.idx < 0) return [0, len];
-  var size = Math.ceil(len / info.count);
-  var start = Math.min(len, info.idx * size);
-  return [start, Math.min(len, start + size)];
+  // Proportional split: rounding the chunk SIZE up used to burn short lists out
+  // early and leave late shifts holding only the longest lists.
+  //
+  // A list shorter than the shift count can only appear in some of the shifts.
+  // Each list is therefore given its own stable starting offset, so the short
+  // lists land on different shifts instead of all bunching on the same few -
+  // that's what keeps the workload level across the whole day.
+  var n = info.count;
+  var off = cat ? (hashStr(String(cat)) % n) : 0;
+  var i = ((info.idx + off) % n + n) % n;
+  var start = Math.floor(i * len / n);
+  var end   = Math.floor((i + 1) * len / n);
+  if (end < start) end = start;
+  return [start, Math.min(len, end)];
 }
 
 // Indices in this category's pool that can be picked right now:
 // inside the current block, active, and not yet called.
 function eligibleIdxOf(st, cat, wk, info, called) {
   var arr = activeListOf(st, cat, wk);
-  var r = chunkRangeOf(arr.length, info);
+  var r = chunkRangeOf(arr.length, info, cat);
   var out = [];
   for (var i = r[0]; i < r[1]; i++) {
     var v = arr[i];
@@ -1202,9 +1213,18 @@ function shiftStats(st) {
     if (e.shiftIdx !== info.idx || e.shiftMode !== st.mode) return false;
     return !e.ts || localDateStr(new Date(e.ts)) === today;   // never count older days
   }).length;
-  var mult = isWeekendNow(st) ? weekendCfg(st).quota : 1;
-  var total = Math.max(1, Math.ceil((totalNumsOf(st) / info.count) * mult));
-  return { gated: true, done: done, total: total, remaining: Math.max(total - done, 0), closed: false };
+  // Target = what this block actually holds (already called + still pickable),
+  // not an average of the whole list. An average could demand more numbers than
+  // the block contains, which left the Generate button doing nothing.
+  var wk = isWeekendNow(st), called = calledSetsOf(st);
+  var left = (st.order || []).reduce(function(a, b){
+    return a + eligibleIdxOf(st, b, wk, info, called).length;
+  }, 0);
+  var mult = wk ? weekendCfg(st).quota : 1;
+  var capacity = done + left;
+  var total = Math.max(done, Math.ceil(capacity * mult));
+  return { gated: true, done: done, total: total,
+           remaining: Math.max(0, Math.min(left, total - done)), closed: false };
 }
 
 // ---- Shared-state mutation engine -------------------------------------------
