@@ -212,8 +212,9 @@
   .edit-num-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #1e212b; border: 1px solid rgba(255,255,255,0.1); border-left: 3px solid rgba(255,255,255,0.15); border-radius: 10px; margin-bottom: 6px; }
   .edit-num-row.inactive .edit-num-text { text-decoration: line-through; opacity: 0.45; }
   .edit-num-row.inactive { border-style: dashed; }
-  .edit-mini-btn.act { color: #10b981; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.08); }
-  .edit-mini-btn.act.off { color: #718096; border-color: rgba(255,255,255,0.15); background: transparent; }
+  .edit-mini-btn.act { color: #10b981; border-color: rgba(16,185,129,0.55); background: rgba(16,185,129,0.15); }
+  .edit-mini-btn.act.off { color: #94a3b8; border-color: rgba(148,163,184,0.45); background: rgba(148,163,184,0.10); }
+  .edit-mini-btn.act:active { transform: scale(0.9); }
   .edit-num-row.called { border-left-color: #10b981; opacity: 0.65; }
   .edit-idx { display: none; }   /* the number itself is the identifier - this column only stole room */
   .edit-num-text { flex: 1 1 auto; color: #fff; font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; cursor: pointer; padding: 10px 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3554,16 +3555,23 @@ function pruneInactive(st) {
 // -- Active / inactive numbers (synced) --
 function numSetInactive(vals, inactive) {
   markUndo(inactive ? "Deactivate number" : "Activate number");
+  var usable = (vals || []).filter(function(v){ return v && v !== "SCAN"; });
+  if (!usable.length) { showToast("SCAN entries can't be switched off \u2014 delete one instead"); return; }
   mutateShared(function(st) {
-    var changed = 0;
-    vals.forEach(function(v) {
-      if (!v || v === "SCAN") return;
-      if (inactive && !st.inactive[v]) { st.inactive[v] = 1; changed++; }
-      if (!inactive && st.inactive[v]) { delete st.inactive[v]; changed++; }
+    // Set the wanted state outright. This used to abort when the synced copy
+    // already agreed, and an abort skipped the re-render - so if the phone and
+    // the server ever drifted apart the button did nothing, forever. Writing it
+    // unconditionally makes every device converge on the same answer.
+    if (!st.inactive) st.inactive = {};
+    usable.forEach(function(v) {
+      if (inactive) st.inactive[v] = 1;
+      else delete st.inactive[v];
     });
-    return changed ? st : false;
+    return st;
   }, function(c) {
-    if (c) { renderEditor(); showToast((inactive ? "Deactivated " : "Activated ") + vals.length + (vals.length === 1 ? " number" : " numbers"), "ok"); }
+    renderEditor();          // always redraw, committed or not
+    if (c) showToast((inactive ? "Switched off " : "Switched on ") + usable.length + (usable.length === 1 ? " number" : " numbers"), "ok");
+    else   showToast("Couldn't reach the other devices \u2014 try again");
   });
 }
 
@@ -4831,19 +4839,23 @@ function renderEditor() {
       };
 
       // Active / inactive toggle (inactive numbers are never picked)
-      var actBtn = document.createElement("button");
-      actBtn.className = "edit-mini-btn act" + (off ? " off" : "");
-      actBtn.innerHTML = off ? "&#9711;" : "&#9679;";
-      actBtn.title = off ? "Inactive - tap to activate" : "Active - tap to deactivate";
-      actBtn.disabled = (num === "SCAN");
-      actBtn.onclick = function(){ numSetInactive([num], !off); };
+      // SCAN entries are interchangeable placeholders - there is nothing to
+      // single out, so no toggle is drawn for them (a dead button just looks broken).
+      var actBtn = null;
+      if (num !== "SCAN") {
+        actBtn = document.createElement("button");
+        actBtn.className = "edit-mini-btn act" + (off ? " off" : "");
+        actBtn.innerHTML = off ? "&#9711;" : "&#9679;";
+        actBtn.title = off ? "Switched off - tap to switch on" : "Switched on - tap to switch off";
+        actBtn.onclick = function(){ numSetInactive([num], !off); };
+      }
 
       row.appendChild(handle);
       row.appendChild(idxEl);
       row.appendChild(upBtn);
       row.appendChild(downBtn);
       row.appendChild(txt);
-      row.appendChild(actBtn);
+      if (actBtn) row.appendChild(actBtn);
       row.appendChild(delBtn);
       content.appendChild(row);
     });
