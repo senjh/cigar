@@ -290,6 +290,9 @@
     <div id="storeBadge" class="mode-badge" style="background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.5);color:#6ee7b7;">&#127978; <span id="storeLabel">Main Store</span></div>
   </div>
 
+  <div id="syncWarn" onclick="location.reload()" style="display:none;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;margin-bottom:10px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.6);color:#fecaca;font-size:13px;font-weight:700;cursor:pointer;">
+    &#9888; Changes aren't reaching the server. Tap to reload.
+  </div>
   <div class="status-row">
     <div id="dayModeBadge" class="daymode wd"><span>Weekday</span><span class="sub"></span></div>
     <div id="activeUsers" class="online-chip" style="display:none;" onclick="openUsersPanel()">
@@ -624,7 +627,7 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
-var BUILD = "2026-09-27 \u00b7 audit";   // shown on the login screen + Staff panel
+var BUILD = "2026-09-27 \u00b7 sync-fix-2";   // shown on the login screen + Staff panel
 // ---- Multi-store -------------------------------------------------------------
 // Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
 // is already live stays exactly where it is. Additional stores are namespaced
@@ -1011,6 +1014,19 @@ function escapeHtml(str) {
 }
 
 // Roll a day's call log into a compact summary (for the History panel)
+// Stored day -> in-memory day. Accepts the pair format and the older label format.
+function unpackArchiveDay(d) {
+  if (!d) return d;
+  function back(pairs, obj) {
+    var o = {};
+    if (pairs) toList(pairs).forEach(function(p){ p = toList(p); if (p.length >= 2 && p[0] != null) o[p[0]] = p[1]; });
+    else if (obj && typeof obj === "object") Object.keys(obj).forEach(function(k){ o[k] = obj[k]; });
+    return o;
+  }
+  return { date: d.date, total: d.total || 0, byHour: toList(d.byHour),
+           byCat: back(d.cats, d.byCat), byUser: back(d.users, d.byUser) };
+}
+
 function summarizeHist(hist, dateStr) {
   var byHour = []; for (var i = 0; i < 24; i++) byHour.push(0);
   var byUser = {}, byCat = {}, total = 0;
@@ -1429,7 +1445,14 @@ function encodeShared(st) {
     weekend: st.weekend,
     accounts: st.accounts || [], masterPin: st.masterPin || "1212",
     inactiveList: Object.keys(st.inactive || {}),
-    archive: st.archive || [],
+    // Per-product / per-person counts are stored as [name, count] PAIRS, never
+    // as labels: Firebase refuses labels containing . # $ [ ] / and a single
+    // "Marlboro Blend No. 27" was enough to make every save in the store fail.
+    archive: (st.archive || []).map(function(d) {
+      return { date: d.date, total: d.total || 0, byHour: d.byHour || [],
+               cats:  Object.keys(d.byCat  || {}).map(function(k){ return [k, d.byCat[k]]; }),
+               users: Object.keys(d.byUser || {}).map(function(k){ return [k, d.byUser[k]]; }) };
+    }),
     families: st.families.map(function(f){ return { name: f.name, color: f.color }; }),
     modes: st.modes.map(function(m){ return { id: m.id, name: m.name, color: m.color, open: m.open, close: m.close, shifts: m.shifts }; }),
     catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
@@ -1448,7 +1471,7 @@ function decodeShared(remote) {
              weekend: remote.weekend || null, wnums: {}, wpos: {}, cartonDone: {},
              accounts: toList(remote.accounts), masterPin: remote.masterPin || "1212",
              inactive: (function(){ var o = {}; toList(remote.inactiveList).forEach(function(v){ if (v) o[v] = 1; }); return o; })(),
-             archive: toList(remote.archive),
+             archive: toList(remote.archive).map(unpackArchiveDay),
              pos: {}, nums: {}, upcs: {}, order: [], families: [], familyOf: {}, modes: [],
              cartonNums: {}, cartonUpcs: {}, cartonOrder: [] };
   st.families = toList(remote.families).filter(function(f){ return f && f.name; }).map(function(f){ return { name: f.name, color: f.color || "#64748b" }; });
@@ -1544,7 +1567,88 @@ function pushEditUndo(label, pre, histLen) {
   save();
 }
 
+// Last line of defence: Firebase rejects the WHOLE save if any label contains
+// . # $ [ ] / - one bad label anywhere silently stops the store from saving.
+// Anything illegal is swapped for "_" before it's sent (and noted in the log).
+function fbSafe(v) {
+  if (Array.isArray(v)) return v.map(fbSafe);
+  if (v && typeof v === "object") {
+    var o = {};
+    Object.keys(v).forEach(function(k) {
+      var key = k;
+      if (key === "" || /[.#$\[\]\/]/.test(key)) {
+        key = (key || "_").replace(/[.#$\[\]\/]/g, "_");
+        console.warn("Sequencer: renamed an illegal label before saving:", k);
+      }
+      o[key] = fbSafe(v[k]);
+    });
+    return o;
+  }
+  return v;
+}
+
+// ---- Recovering work the server never received -------------------------------
+var pendingRemote = null;
+function countsOf(st) {
+  var n = 0; (st.order || []).forEach(function(b){ n += (st.nums[b] || []).length + ((st.wnums || {})[b] || []).length; });
+  var c = 0; (st.cartonOrder || []).forEach(function(b){ c += (st.cartonNums[b] || []).length; });
+  return { cats: (st.order || []).length, nums: n, cartons: c };
+}
+function showRecovery() {
+  if (!pendingRemote) return;
+  if (!currentUser) return;                       // decided right after sign-in
+  if (!isMaster()) {                              // staff phones just take the server's copy
+    var r = pendingRemote; pendingRemote = null;
+    applyShared(decodeShared(r));
+    showToast("Updated from the server");
+    return;
+  }
+  var mine = countsOf(state), theirs = countsOf(decodeShared(pendingRemote));
+  var line = function(c){ return c.cats + " categories \u00b7 " + c.nums + " numbers \u00b7 " + c.cartons + " carton numbers"; };
+  promptChoice("This phone has changes the server never received", [
+    { label: "Keep THIS phone's version", value: "mine", color: "#10b981", sub: line(mine) + " \u2014 uploads it for everyone" },
+    { label: "Use the server's version", value: "server", color: "#64748b", sub: line(theirs) + " \u2014 this phone's unsaved changes are dropped" }
+  ], function(v) {
+    if (v === "mine") uploadLocalVersion();
+    else if (v === "server") { var r = pendingRemote; pendingRemote = null; applyShared(decodeShared(r)); showToast("Now using the server's version", "ok"); }
+  });
+}
+function uploadLocalVersion() {
+  if (!db) { showToast("No connection \u2014 try again when online"); return; }
+  var local = normalizeShared(sharedSnapshot());
+  local.rev = Math.max(local.rev || 0, (pendingRemote && pendingRemote.rev) || 0) + 1;
+  try {
+    db.ref(statePath()).set(fbSafe(encodeShared(local)), function(err) {
+      if (err) { setSyncHealth(false, err.message || err); showToast("Upload failed \u2014 try again"); return; }
+      pendingRemote = null;
+      state.rev = local.rev; save();
+      setSyncHealth(true);
+      refreshUI(); if (isEditorOpen()) renderEditor();
+      showToast("This phone's version is now on the server", "ok");
+    });
+  } catch(e) { setSyncHealth(false, e.message); showToast("Upload failed \u2014 try again"); }
+}
+
+// ---- Sync health: make a stalled server visible instead of silent ----
+var syncHealthy = true;
+function setSyncHealth(ok, why) {
+  if (ok === syncHealthy && ok) return;
+  syncHealthy = ok;
+  var el = document.getElementById("syncWarn");
+  if (el) {
+    el.style.display = ok ? "none" : "flex";
+    if (!ok && why) el.title = String(why);
+  }
+  if (!ok) console.warn("Sequencer: a save did not reach the server:", why);
+}
+
 function mutateShared(mutator, onDone) {
+  if (pendingRemote) {                // unresolved: saving now would bury this phone's unsaved work
+    _pendingUndoLabel = null;
+    showRecovery();
+    if (onDone) onDone(false);
+    return;
+  }
   var undoLabel = _pendingUndoLabel; _pendingUndoLabel = null;
   var lastPre = null, lastHistLen = 0;
   if (db && syncEnabled) {
@@ -1555,15 +1659,16 @@ function mutateShared(mutator, onDone) {
         var result = mutator(working);
         if (result === false) return; // abort, no change
         working.rev = (working.rev || 0) + 1;
-        return encodeShared(working);
+        return fbSafe(encodeShared(working));
       }, function(error, committed, snapshot) {
-        if (error) { showToast("Sync error - saved locally"); fallbackLocal(); return; }
+        if (error) { setSyncHealth(false, error.message || error); showToast("Not saved to the server \u2014 kept on this phone"); fallbackLocal(); return; }
+        if (committed) setSyncHealth(true);
         if (committed && snapshot) applyShared(decodeShared(snapshot.val()));
         if (committed && undoLabel && lastPre) pushEditUndo(undoLabel, lastPre, lastHistLen);
         if (onDone) onDone(committed);
       });
       return;
-    } catch(e) { /* fall through to local */ }
+    } catch(e) { setSyncHealth(false, e && e.message); /* fall through to local */ }
   }
   fallbackLocal();
 
@@ -2480,7 +2585,7 @@ function storeAdd(name) {
   if (!name) { showToast("Enter a store name"); return; }
   if (!db) { showToast("Need a connection to create a store"); return; }
   var id = "s" + Date.now().toString(36);
-  var seed = encodeShared(blankStoreSeed());
+  var seed = fbSafe(encodeShared(blankStoreSeed()));
   try {
     // Write the store's starting data FIRST, so it can never be filled in by
     // the generic seeder (which would copy this store's numbers across).
@@ -2645,6 +2750,7 @@ function loginUser(name) {
 
   // Start syncing
   startSync();
+  if (pendingRemote) setTimeout(showRecovery, 300);
 }
 
 function registerPresence() {
@@ -2678,7 +2784,16 @@ function startStateSync() {
       // Ignore stale snapshots AND the echo of our own last write (same rev) -
       // the transaction callback already applied it, so re-rendering here just
       // doubled the work and made generation feel laggy.
-      if (remote.rev !== undefined && state.rev !== undefined && remote.rev <= state.rev) return;
+      if (remote.rev !== undefined && state.rev !== undefined && remote.rev === state.rev) return;
+      // This phone is AHEAD of the server: it made changes the server never
+      // accepted (e.g. while saving was broken). Don't overwrite that work
+      // silently - hold the server copy and let the operator decide.
+      if (remote.rev !== undefined && state.rev !== undefined && state.rev > remote.rev) {
+        pendingRemote = remote;
+        showRecovery();
+        return;
+      }
+      pendingRemote = null;
       applyShared(decodeShared(remote));
     });
   } catch(e) { console.warn("State sync error:", e.message); }
@@ -2728,7 +2843,7 @@ function seedRemote() {
       // somehow arrives empty starts blank rather than inheriting numbers.
       var seed = STORE_ID === MAIN_STORE ? normalizeShared(sharedSnapshot()) : blankStoreSeed();
       seed.rev = (seed.rev || 0) + 1;
-      return encodeShared(seed);
+      return fbSafe(encodeShared(seed));
     });
   } catch(e) {}
 }
@@ -4302,8 +4417,16 @@ function quickParse(text, def, newSec) {
       if (!got) { if (piece.trim()) unknown.push(piece.trim()); return; }
       if (!cur) { orphans += got.length; return; }
       got.forEach(function(n) {
-        if (n !== "SCAN" && (seen[n] || findNumberOwner(state, n))) { cur.dups++; return; }
-        if (n !== "SCAN") seen[n] = 1;
+        if (n !== "SCAN") {
+          var own = seen[n] ? { label: "earlier in this paste" } : findNumberOwner(state, n);
+          if (own) {
+            cur.dups++;
+            cur.dupWhere = cur.dupWhere || {};
+            cur.dupWhere[own.label] = (cur.dupWhere[own.label] || 0) + 1;
+            return;
+          }
+          seen[n] = 1;
+        }
         cur.nums.push(n);
       });
     });
@@ -4370,7 +4493,9 @@ function renderQuickPreview() {
       (g.isNew && g.sec === "calls" ? "<span class='qa-tag' style='background:" + rgbaStr(col, 0.2) + ";color:" + lightenHex(col, 0.4) + ";'>" + escapeHtml(g.family) + "</span>" : "") +
       "<span style='color:#6ee7b7;font-weight:800;flex-shrink:0;'>+" + g.nums.length + "</span>" +
       (g.dups ? "<span style='color:#94a3b8;font-size:11px;flex-shrink:0;'>" + g.dups + " dup</span>" : "") +
-      "</div>";
+      "</div>" +
+      (g.dupWhere ? "<div style='color:#94a3b8;font-size:11px;margin:-2px 4px 8px 12px;'>Already on file in: " +
+        Object.keys(g.dupWhere).map(function(w){ return escapeHtml(w) + (g.dupWhere[w] > 1 ? " (" + g.dupWhere[w] + ")" : ""); }).join(", ") + "</div>" : "");
   });
   if (p.orphans) html += "<div style='color:#fca5a5;font-size:12px;margin:6px 2px;'>" + p.orphans + " number" + (p.orphans === 1 ? "" : "s") + " before any category name \u2014 put a category name on the line above them.</div>";
   if (p.unknown.length) html += "<div style='color:#fca5a5;font-size:12px;margin:6px 2px;'>Couldn't read: " + escapeHtml(p.unknown.slice(0, 5).join(", ")) + (p.unknown.length > 5 ? "\u2026" : "") + "</div>";
