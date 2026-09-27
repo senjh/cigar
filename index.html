@@ -109,30 +109,6 @@
   .progress-bg { background: rgba(255,255,255,0.15); height: 8px; border-radius: 4px; overflow: hidden; }
   .progress-fill { background: #3b82f6; height: 100%; width: 0%; transition: width 0.3s ease; }
 
-  /* Brand Card Themes */
-  .active-card.marlboro-theme  { background: #6b1a1a !important; border-color: rgba(255,255,255,0.2) !important; }
-  .active-card.marlboro-theme  #brandLabel { color: #f5c0c0 !important; }
-  .active-card.marlboro-theme  #phoneNumber { color: #ffffff !important; }
-
-  .active-card.newport-theme   { background: #0a4a3a !important; border-color: rgba(255,255,255,0.2) !important; }
-  .active-card.newport-theme   #brandLabel { color: #6ee7b7 !important; }
-  .active-card.newport-theme   #phoneNumber { color: #ffffff !important; }
-
-  .active-card.kool-theme      { background: #0a4a1a !important; border-color: rgba(255,255,255,0.2) !important; }
-  .active-card.kool-theme      #brandLabel { color: #86efac !important; }
-  .active-card.kool-theme      #phoneNumber { color: #ffffff !important; }
-
-  .active-card.bm-theme        { background: #3b1f0a !important; border-color: rgba(255,255,255,0.15) !important; }
-  .active-card.bm-theme        #brandLabel { color: #d4a574 !important; }
-  .active-card.bm-theme        #phoneNumber { color: #ffffff !important; }
-
-  .active-card.zyn-theme       { background: #f0f4f8 !important; border-color: rgba(0,0,0,0.1) !important; }
-  .active-card.lucky-theme     { background: #7f1d1d !important; border-color: rgba(252,165,165,0.4) !important; }
-  .active-card.lucky-theme     #brandLabel { color: #fca5a5 !important; }
-  .active-card.lucky-theme     #phoneNumber { color: #ffffff !important; }
-  .active-card.zyn-theme       #brandLabel { color: #2d3748 !important; }
-  .active-card.zyn-theme       #phoneNumber { color: #1a202c !important; }
-
   /* Current Call Card - every zone has a RESERVED height so the card (and all
      buttons below it) keeps the exact same geometry no matter what's shown:
      short/long names, phone vs SCAN, barcode or none. No more layout shift. */
@@ -166,12 +142,6 @@
   /* Brand Groups */
   .brand-group { margin-bottom: 12px; }
   .brand-group-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 10px; cursor: pointer; margin-bottom: 6px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; user-select: none; }
-  .brand-group-header.marlboro { background: rgba(107,26,26,0.4); color: #f5c0c0; }
-  .brand-group-header.newport  { background: rgba(10,74,58,0.4);  color: #6ee7b7; }
-  .brand-group-header.kool     { background: rgba(10,74,26,0.4);  color: #86efac; }
-  .brand-group-header.bm       { background: rgba(59,31,10,0.4);  color: #d4a574; }
-  .brand-group-header.other    { background: rgba(255,255,255,0.07); color: #a0aec0; }
-  .brand-group-header.lucky    { background: rgba(220,38,38,0.3); color: #fca5a5; }
   .brand-group-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
   .brand-group-chips.collapsed { display: none; }
   .group-toggle { font-size: 11px; opacity: 0.7; }
@@ -187,14 +157,10 @@
   .log-filter-btn.active { background: rgba(59,130,246,0.25); color: #93c5fd; border-color: rgba(59,130,246,0.4); }
 
   /* Chips */
-  .chip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
   .chip { background: #2a2d3e; padding: 10px 10px; border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.12); }
   .chip strong { color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; font-weight: 600; }
   .chip span { color: #a0aec0; font-variant-numeric: tabular-nums; }
   .chip.done { opacity: 0.4; border: 1px solid #10b981; }
-
-  /* History */
-  .history-log { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 14px; color: #ffffff; white-space: pre-wrap; line-height: 1.6; }
 
   /* Danger / Import */
   .danger-text { color: #f87171; background: none; border: none; font-size: 15px; padding: 10px; text-align: center; width: 100%; margin-top: 10px; cursor: pointer; }
@@ -276,18 +242,7 @@
   .barcode-wrap canvas { max-width: 100%; max-height: 108px; width: auto; }
   .barcode-placeholder { color: #94a3b8; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
   .barcode-wrap svg { width: 100%; max-width: 300px; display: block; margin: 0 auto; }
-  .barcode-num { font-family: ui-monospace, monospace; font-size: 13px; color: #333; margin-top: 4px; letter-spacing: 2px; font-weight: 700; }
 
-  /* Barcode Modal */
-  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:1000; justify-content:center; align-items:center; }
-  .modal-overlay.open { display:flex; }
-  .modal-box { background:#1e212b; border-radius:20px; padding:24px; width:90%; max-width:360px; text-align:center; border:1px solid rgba(255,255,255,0.1); }
-  .modal-title { font-size:16px; font-weight:700; color:#ffffff; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px; }
-  .modal-subtitle { font-size:13px; color:#a0aec0; margin-bottom:16px; }
-  .modal-barcode-wrap { background:#ffffff; border-radius:12px; padding:14px 10px 8px; margin-bottom:16px; }
-  .modal-barcode-wrap canvas { width:100%; display:block; }
-  .modal-close { width:100%; border:none; border-radius:12px; padding:14px; font-size:16px; font-weight:600; cursor:pointer; background:rgba(255,255,255,0.1); color:#ffffff; }
-  .modal-no-barcode { color:#a0aec0; font-size:14px; padding:20px 0; }
   .chip { cursor:pointer; transition:0.15s; }
   .chip:active { transform:scale(0.96); opacity:0.8; }
 
@@ -669,7 +624,7 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
-var BUILD = "2026-09-27 \u00b7 quick-add";   // shown on the login screen + Staff panel
+var BUILD = "2026-09-27 \u00b7 audit";   // shown on the login screen + Staff panel
 // ---- Multi-store -------------------------------------------------------------
 // Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
 // is already live stays exactly where it is. Additional stores are namespaced
@@ -690,7 +645,6 @@ function lsKey(base)  { return base + (STORE_ID === MAIN_STORE ? "" : "-" + STOR
 
 var STORE = "seq-v5-" + NUMS_VERSION + (STORE_ID === MAIN_STORE ? "" : "-" + STORE_ID);
 
-var BRANDS = Object.keys(DEFAULT_NUMS);
 
 // NUMS is the live, editable copy. It always points at state.nums after
 // bootstrap, and syncs to all devices through Firebase like call progress.
@@ -769,8 +723,6 @@ var DEFAULT_UPCS = {
 
 // UPCS is the live, editable copy - points at state.upcs after bootstrap
 var UPCS = DEFAULT_UPCS;
-
-function totalNums() { return BRANDS.reduce(function(a, s){ return a + NUMS[s].length; }, 0); }
 
 // ---- Families (editable groups, each with its own brand color) --------------
 // A "family" is a brand group (Marlboro, Newports, ...). Every call category
@@ -1051,20 +1003,6 @@ function weekendSwitchInfo(now) {
   };
 }
 
-function daysetOf(cat, st) {
-  var map = ((st || state) && (st || state).dayOf) || {};
-  var v = map[cat];
-  return (v === "weekday" || v === "weekend") ? v : "always";
-}
-
-// How strongly a category participates right now: 1 = full, 0.5 = throttled, 0 = idle
-function dayFactorOf(cat, st, isWknd) {
-  var ds = daysetOf(cat, st);
-  if (ds === "always") return 1;
-  if (isWknd) return ds === "weekday" ? weekendCfg(st).weight : 1;
-  return ds === "weekend" ? 0 : 1;
-}
-
 // ---- Utilities ----------------------------------------------------------------
 function escapeHtml(str) {
   return String(str == null ? "" : str)
@@ -1161,9 +1099,9 @@ function bootstrap() {
     nums: state.nums, upcs: state.upcs, order: state.order,
     families: state.families, familyOf: state.familyOf, modes: state.modes,
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
-    autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
+    autoResetDate: state.autoResetDate, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
-    accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
+    accounts: state.accounts, masterPin: state.masterPin,
     inactive: state.inactive, archive: state.archive,
     rev: state.rev
   });
@@ -1172,9 +1110,10 @@ function bootstrap() {
   state.families = norm.families; state.familyOf = norm.familyOf; state.modes = norm.modes;
   state.cartonNums = norm.cartonNums; state.cartonUpcs = norm.cartonUpcs; state.cartonOrder = norm.cartonOrder;
   state.autoResetDate = norm.autoResetDate;
-  state.dayOf = norm.dayOf; state.weekend = norm.weekend;
+  state.weekend = norm.weekend;
   state.wnums = norm.wnums; state.wpos = norm.wpos; state.cartonDone = norm.cartonDone;
-  state.accounts = norm.accounts; state.masterPin = norm.masterPin; state.requireLogin = norm.requireLogin;
+  state.accounts = norm.accounts; state.masterPin = norm.masterPin;
+  delete state.dayOf; delete state.requireLogin;   // retired fields left in older saved data
   state.inactive = norm.inactive; state.archive = norm.archive;
   state.rev = norm.rev || 0;
   syncRefs();
@@ -1208,6 +1147,20 @@ function isInactive(st, val) { return !!((st || state).inactive || {})[val]; }
 // The slice of a list that belongs to the CURRENT time block. Lists are split
 // into as many equal chunks as the schedule has shifts; picks stay inside the
 // current chunk. Ungated schedules (no shifts) use the whole list.
+// Progress for one list, measured the same way the generator sees it:
+// total = active numbers in today's pool, left = active ones not yet called.
+// (Counting "calls made" instead drifted whenever a called number was later
+// switched off, so the screen could claim "List Complete!" with work left.)
+function listProgress(st, cat, wk, called) {
+  var arr = activeListOf(st, cat, wk), total = 0, left = 0;
+  for (var i = 0; i < arr.length; i++) {
+    if (isInactive(st, arr[i])) continue;
+    total++;
+    if (!isCalledIn(called, cat, wk, i, arr[i])) left++;
+  }
+  return { total: total, left: left, done: total - left };
+}
+
 function chunkRangeOf(len, info, cat) {
   if (!info || !info.gated || !info.count || info.idx == null || info.idx < 0) return [0, len];
   // Proportional split: rounding the chunk SIZE up used to burn short lists out
@@ -1239,14 +1192,6 @@ function eligibleIdxOf(st, cat, wk, info, called) {
     out.push(i);
   }
   return out;
-}
-
-// Total pickable numbers today (active only) - drives the per-shift quota
-function totalNumsOf(st) {
-  var wk = isWeekendNow(st);
-  return (st.order || []).reduce(function(a, b){
-    return a + activeListOf(st, b, wk).filter(function(v){ return !isInactive(st, v); }).length;
-  }, 0);
 }
 
 // Quota per shift = an even split of the whole list across the mode's shifts,
@@ -1377,7 +1322,6 @@ function normalizeShared(st) {
   }
   if (!st.masterPin) st.masterPin = "1212";
   if (!st.accounts.some(function(a){ return a.role === "master"; })) st.accounts[0].role = "master";
-  st.requireLogin = true;   // CRM style: an account is always required
 
   // Carton "done" checks: { cartonCat: { index: userName } }
   // Carton checks are keyed by the carton's NUMBER, not its row position.
@@ -1418,12 +1362,7 @@ function normalizeShared(st) {
   });
   Object.keys(st.wnums).forEach(function(n){ if (st.order.indexOf(n) === -1) { delete st.wnums[n]; delete st.wpos[n]; } });
 
-  if (!st.dayOf) st.dayOf = {};
-  st.order.forEach(function(n){
-    var v = st.dayOf[n];
-    if (v !== "weekday" && v !== "weekend") st.dayOf[n] = "always";
-  });
-  Object.keys(st.dayOf).forEach(function(n){ if (st.order.indexOf(n) === -1) delete st.dayOf[n]; });
+  delete st.dayOf; delete st.requireLogin;   // retired fields - drop from old saved data
 
   // ---- Self-heal the call log -------------------------------------------------
   // The log is meant to hold TODAY's calls only; earlier days live in the
@@ -1475,9 +1414,9 @@ function sharedSnapshot() {
     nums: state.nums, upcs: state.upcs, order: state.order,
     families: state.families, familyOf: state.familyOf, modes: state.modes,
     cartonNums: state.cartonNums, cartonUpcs: state.cartonUpcs, cartonOrder: state.cartonOrder,
-    autoResetDate: state.autoResetDate, dayOf: state.dayOf, weekend: state.weekend,
+    autoResetDate: state.autoResetDate, weekend: state.weekend,
     wnums: state.wnums, wpos: state.wpos, cartonDone: state.cartonDone,
-    accounts: state.accounts, masterPin: state.masterPin, requireLogin: state.requireLogin,
+    accounts: state.accounts, masterPin: state.masterPin,
     inactive: state.inactive, archive: state.archive,
     rev: state.rev || 0
   }));
@@ -1488,12 +1427,12 @@ function encodeShared(st) {
     mode: st.mode, hist: st.hist, rev: st.rev || 0,
     autoResetDate: st.autoResetDate || "",
     weekend: st.weekend,
-    accounts: st.accounts || [], masterPin: st.masterPin || "1212", requireLogin: !!st.requireLogin,
+    accounts: st.accounts || [], masterPin: st.masterPin || "1212",
     inactiveList: Object.keys(st.inactive || {}),
     archive: st.archive || [],
     families: st.families.map(function(f){ return { name: f.name, color: f.color }; }),
     modes: st.modes.map(function(m){ return { id: m.id, name: m.name, color: m.color, open: m.open, close: m.close, shifts: m.shifts }; }),
-    catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", day: st.dayOf[n] || "always", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
+    catalog: st.order.map(function(n){ return { name: n, pos: st.pos[n] || 0, upc: st.upcs[n] || "", fam: st.familyOf[n] || "", nums: st.nums[n] || [], wnums: st.wnums[n] || [], wpos: st.wpos[n] || 0 }; }),
     cartons: st.cartonOrder.map(function(n){
       var d = (st.cartonDone && st.cartonDone[n]) || {};
       return { name: n, upc: st.cartonUpcs[n] || "", nums: st.cartonNums[n] || [],
@@ -1506,8 +1445,8 @@ function decodeShared(remote) {
   if (!remote) return null;
   var st = { mode: remote.mode || "blocks", hist: toList(remote.hist), rev: remote.rev || 0,
              autoResetDate: remote.autoResetDate || "",
-             weekend: remote.weekend || null, dayOf: {}, wnums: {}, wpos: {}, cartonDone: {},
-             accounts: toList(remote.accounts), masterPin: remote.masterPin || "1212", requireLogin: remote.requireLogin === true,
+             weekend: remote.weekend || null, wnums: {}, wpos: {}, cartonDone: {},
+             accounts: toList(remote.accounts), masterPin: remote.masterPin || "1212",
              inactive: (function(){ var o = {}; toList(remote.inactiveList).forEach(function(v){ if (v) o[v] = 1; }); return o; })(),
              archive: toList(remote.archive),
              pos: {}, nums: {}, upcs: {}, order: [], families: [], familyOf: {}, modes: [],
@@ -1522,7 +1461,6 @@ function decodeShared(remote) {
       st.pos[e.name]  = e.pos || 0;
       if (e.upc) st.upcs[e.name] = e.upc;
       if (e.fam) st.familyOf[e.name] = e.fam;
-      if (e.day) st.dayOf[e.name] = e.day;
       st.wnums[e.name] = toList(e.wnums);
       st.wpos[e.name]  = e.wpos || 0;
     });
@@ -1563,9 +1501,9 @@ function applyShared(stMap) {
   state.families = stMap.families; state.familyOf = stMap.familyOf; state.modes = stMap.modes;
   state.cartonNums = stMap.cartonNums; state.cartonUpcs = stMap.cartonUpcs; state.cartonOrder = stMap.cartonOrder;
   state.autoResetDate = stMap.autoResetDate;
-  state.dayOf = stMap.dayOf; state.weekend = stMap.weekend;
+  state.weekend = stMap.weekend;
   state.wnums = stMap.wnums; state.wpos = stMap.wpos; state.cartonDone = stMap.cartonDone;
-  state.accounts = stMap.accounts; state.masterPin = stMap.masterPin; state.requireLogin = stMap.requireLogin;
+  state.accounts = stMap.accounts; state.masterPin = stMap.masterPin;
   state.inactive = stMap.inactive; state.archive = stMap.archive;
   state.rev  = stMap.rev || 0;
   syncRefs();
@@ -1592,7 +1530,7 @@ function markUndo(label) { _pendingUndoLabel = label || "Edit"; }
 function snapshotEditable(st) {
   return JSON.parse(JSON.stringify({
     nums: st.nums, wnums: st.wnums, upcs: st.upcs, order: st.order,
-    familyOf: st.familyOf, dayOf: st.dayOf, families: st.families,
+    familyOf: st.familyOf, families: st.families,
     cartonNums: st.cartonNums, cartonUpcs: st.cartonUpcs, cartonOrder: st.cartonOrder,
     cartonDone: st.cartonDone || {},
     modes: st.modes, weekend: st.weekend, inactive: st.inactive || {},
@@ -1650,7 +1588,7 @@ function editUndoLast() {
   mutateShared(function(st) {
     var d = snap.data;
     st.nums = d.nums; st.wnums = d.wnums; st.upcs = d.upcs; st.order = d.order;
-    st.familyOf = d.familyOf; st.dayOf = d.dayOf; st.families = d.families;
+    st.familyOf = d.familyOf; st.families = d.families;
     st.cartonNums = d.cartonNums; st.cartonUpcs = d.cartonUpcs; st.cartonOrder = d.cartonOrder;
     st.cartonDone = d.cartonDone || {};
     st.modes = d.modes; st.weekend = d.weekend; st.inactive = d.inactive || {};
@@ -1736,7 +1674,6 @@ function onUndo(onFinish) {
 }
 
 // ---- Render -----------------------------------------------------------------
-var undoArmed = undoArmed || false;
 function refreshUI() {
   try {
   var h         = state.hist[state.ptr];
@@ -1804,8 +1741,8 @@ function refreshUI() {
   } else {
     dash.style.display = "none";
     chipLabel.textContent = "(All-Time)";
-    var _wk0 = isWeekendNow(state);
-    var allRem = BRANDS.reduce(function(a, s){ return a + (activeListOf(state, s, _wk0).filter(function(v){ return !isInactive(state, v); }).length - activePosOf(state, s, _wk0)); }, 0);
+    var _wk0 = isWeekendNow(state), _cs0 = calledSetsOf(state);
+    var allRem = BRANDS.reduce(function(a, s){ return a + listProgress(state, s, _wk0, _cs0).left; }, 0);
     if (allRem <= 0) {
       nextBtn.disabled = true;
       nextBtn.classList.add("done");
@@ -1903,7 +1840,8 @@ function refreshUI() {
   var chipContainer = document.getElementById("chips");
   chipContainer.innerHTML = "";
 
-  var _wkNow = isWeekendNow(state);
+  var _wkNow = isWeekendNow(state), _csNow = calledSetsOf(state), _prog = {};
+  BRANDS.forEach(function(b){ _prog[b] = listProgress(state, b, _wkNow, _csNow); });
   var grouped = {};
   FAMILIES.forEach(function(f){ grouped[f.name] = []; });
   BRANDS.forEach(function(s) {
@@ -1921,8 +1859,8 @@ function refreshUI() {
     var groupEl = document.createElement("div");
     groupEl.className = "brand-group";
 
-    var gDone  = brands.reduce(function(a, s){ return a + activePosOf(state, s, _wkNow); }, 0);
-    var gTotal = brands.reduce(function(a, s){ return a + activeListOf(state, s, _wkNow).filter(function(v){ return !isInactive(state, v); }).length; }, 0);
+    var gDone  = brands.reduce(function(a, s){ return a + _prog[s].done; }, 0);
+    var gTotal = brands.reduce(function(a, s){ return a + _prog[s].total; }, 0);
     var isCollapsed = state.collapsed && state.collapsed[fam.name];
 
     var header = document.createElement("div");
@@ -1942,8 +1880,8 @@ function refreshUI() {
     chipsEl.className = "brand-group-chips" + (isCollapsed ? " collapsed" : "");
 
     brands.forEach(function(s) {
-      var total   = activeListOf(state, s, _wkNow).filter(function(v){ return !isInactive(state, v); }).length;
-      var current = activePosOf(state, s, _wkNow);
+      var total   = _prog[s].total;
+      var current = _prog[s].done;
       var isDone  = current >= total && total > 0;
       var chip    = document.createElement("div");
       chip.className = "chip" + (isDone ? " done" : "");
@@ -2267,9 +2205,18 @@ function _copyCurrentBackupPart() {
   showToast(copied ? ("Part " + (_backupIdx + 1) + " copied - paste it in the chat") : "Tap the box, Select All, Copy");
 }
 
+// What a backup holds: the store's shared data only. Excludes the in-memory
+// undo history (it made a normal backup ~10x larger - 100+ paste parts instead
+// of ~10) and the old duplicate copy of every number list.
+function backupPayload() {
+  var st = JSON.parse(JSON.stringify(state));
+  delete st.editUndo; delete st.shuffleUndo; delete st.dayOf; delete st.requireLogin;
+  return { version: NUMS_VERSION, exportedAt: new Date().toISOString(), store: storeName(), state: st };
+}
+
 document.getElementById("copyBackupBtn").onclick = function() {
   _copySheetPlain = false;
-  var backup = { version: NUMS_VERSION, exportedAt: new Date().toISOString(), nums: NUMS, state: state };
+  var backup = backupPayload();
   var txt = JSON.stringify(backup);
   _backupChunks = [];
   for (var i = 0; i < txt.length; i += BACKUP_CHUNK_SIZE) _backupChunks.push(txt.slice(i, i + BACKUP_CHUNK_SIZE));
@@ -2285,7 +2232,7 @@ document.getElementById("backupModalClose").onclick = function(){ document.getEl
 document.getElementById("backupModal").onclick = function(e){ if (e.target === this) this.style.display = "none"; };
 
 document.getElementById("exportBtn").onclick = function() {
-  var backup = { version: NUMS_VERSION, exportedAt: new Date().toISOString(), nums: NUMS, state: state };
+  var backup = backupPayload();
   var blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
   var a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -2344,12 +2291,12 @@ document.getElementById("importLabel").addEventListener("click", function(e) {
         st.families = imported.families;
         st.familyOf = imported.familyOf;
         st.modes = imported.modes;
-        st.dayOf = imported.dayOf;
         st.weekend = imported.weekend;
         st.wnums = imported.wnums;
         st.wpos = imported.wpos;
         st.cartonDone = imported.cartonDone;
         st.inactive = imported.inactive;
+        st.archive = imported.archive;
         st.cartonNums = imported.cartonNums;
         st.cartonUpcs = imported.cartonUpcs;
         st.cartonOrder = imported.cartonOrder;
@@ -2653,7 +2600,6 @@ function initFirebase() {
     var firebaseConfig = { databaseURL: FIREBASE_URL };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.database();
-    console.log("Firebase connected");
     // Connection status indicator
     try {
       firebase.database().ref(".info/connected").on("value", function(snap) {
@@ -2669,7 +2615,7 @@ function initFirebase() {
     startStateSync();
     if (currentUser) startSync();
   } catch(e) {
-    console.log("Firebase init error:", e.message);
+    console.warn("Firebase init error:", e.message);
     setTimeout(initFirebase, 3000);
   }
 }
@@ -2735,7 +2681,7 @@ function startStateSync() {
       if (remote.rev !== undefined && state.rev !== undefined && remote.rev <= state.rev) return;
       applyShared(decodeShared(remote));
     });
-  } catch(e) { console.log("State sync error:", e.message); }
+  } catch(e) { console.warn("State sync error:", e.message); }
 }
 
 var _presenceSyncStarted = false;
@@ -2769,7 +2715,7 @@ function startSync() {
     db.ref(".info/connected").on("value", function(snap) {
       if (snap.val()) registerPresence();
     });
-  } catch(e) { console.log("Sync error:", e.message); }
+  } catch(e) { console.warn("Sync error:", e.message); }
 }
 
 // Seed Firebase with local progress only when the remote node is empty
@@ -2909,26 +2855,6 @@ function tryAutoLogin() {
   }
   if (acct.role === "master") masterUnlocked = true;
   loginUser(acct.name);
-}
-
-// Small numeric PIN prompt (reuses the passcode overlay styling)
-function promptPin(subtitle, cb) {
-  var overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:7000;display:flex;justify-content:center;align-items:flex-start;padding-top:calc(15vh + env(safe-area-inset-top));";
-  overlay.innerHTML = '<div style="background:#1e212b;border-radius:20px;padding:26px;width:88%;max-width:340px;text-align:center;border:1px solid rgba(255,255,255,0.1);">' +
-    '<div style="color:#fff;font-size:17px;font-weight:700;margin-bottom:6px;">PIN</div>' +
-    '<div style="color:#a0aec0;font-size:13px;margin-bottom:16px;">' + escapeHtml(subtitle) + '</div>' +
-    '<input id="pinField" type="password" inputmode="numeric" maxlength="8" placeholder="\u2022\u2022\u2022\u2022" style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:14px;font-size:22px;color:#fff;text-align:center;letter-spacing:8px;outline:none;box-sizing:border-box;margin-bottom:14px;">' +
-    '<div style="display:flex;gap:10px;">' +
-    '<button id="pinCancel" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>' +
-    '<button id="pinOk" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:#3b82f6;color:#fff;">OK</button>' +
-    '</div></div>';
-  document.body.appendChild(overlay);
-  setTimeout(function(){ var f = document.getElementById("pinField"); if (f) f.focus(); }, 100);
-  function close(){ try { document.body.removeChild(overlay); } catch(e) {} }
-  document.getElementById("pinCancel").onclick = close;
-  document.getElementById("pinOk").onclick = function(){ var v = document.getElementById("pinField").value; close(); cb(v); };
-  document.getElementById("pinField").onkeydown = function(e){ if (e.key === "Enter") document.getElementById("pinOk").onclick(); };
 }
 
 document.getElementById("loginBtn").onclick = function() {
@@ -3439,12 +3365,6 @@ function masterSetPin(pin) {
   mutateShared(function(st){ st.masterPin = pin; return st; },
     function(c){ if (c) { showToast("Master passcode changed"); refreshUsersPanel(); } });
 }
-function setRequireLogin(v) {
-  markUndo("Login policy");
-  mutateShared(function(st){ st.requireLogin = !!v; return st; },
-    function(c){ if (c) { showToast(v ? "Only listed users can sign in" : "Anyone with a name can sign in"); refreshUsersPanel(); } });
-}
-
 // ---- Number & Barcode Editor ---------------------------------------------------
 // Two tabs: Call Lists (the sequencer categories) and Cartons (the reference
 // directory). Both support adding/removing categories, editing every number,
@@ -3573,14 +3493,6 @@ function promptChoice(title, items, cb) {
 }
 
 // -- Day tagging + weekend window mutations (synced) --
-function catSetDayset(cat, ds) {
-  markUndo("Change active days");
-  mutateShared(function(st) {
-    if (st.order.indexOf(cat) === -1) return false;
-    st.dayOf[cat] = (ds === "weekday" || ds === "weekend") ? ds : "always";
-    return st;
-  }, function(c){ if (c) renderEditor(); });
-}
 function weekendUpdate(patch, msg) {
   mutateShared(function(st) {
     Object.keys(patch).forEach(function(k){ st.weekend[k] = patch[k]; });
@@ -3606,9 +3518,6 @@ function weekendStepWeight(delta) {
   weekendUpdate({ weight: Math.max(0, Math.min(1, v)) });
 }
 
-var DAYSET_LABELS = { always: "Every day", weekday: "Weekdays (throttled on weekends)", weekend: "Weekends only" };
-var DAYSET_SHORT  = { always: "Every day", weekday: "Weekday", weekend: "Weekend" };
-var DAYSET_COLORS = { always: "#64748b", weekday: "#3b82f6", weekend: "#a855f7" };
 
 // Drop "inactive" flags for numbers that are no longer in any list. Without
 // this a deleted number keeps its flag, and re-adding it later would bring it
@@ -4047,7 +3956,7 @@ function catDelete(sec, name) {
     order.splice(ix, 1);
     delete secNums(st, sec)[name];
     delete secUpcs(st, sec)[name];
-    if (sec === "calls") { delete st.pos[name]; delete st.wpos[name]; delete st.familyOf[name]; delete st.dayOf[name]; delete st.wnums[name]; }
+    if (sec === "calls") { delete st.pos[name]; delete st.wpos[name]; delete st.familyOf[name]; delete st.wnums[name]; }
     pruneInactive(st);
     return st;
   }, function(committed) {
@@ -4602,6 +4511,13 @@ function renderEditor() {
   var back    = document.getElementById("editBackBtn");
   var footer  = document.getElementById("editFooter");
   if (!content) return;
+  // The add-number box must SURVIVE redraws. Every save (yours, or another
+  // phone's) redraws this screen; rebuilding the footer threw away the box you
+  // were typing in - wiping the half-typed number and dropping the keyboard.
+  // Keep it whenever we're still on the same list.
+  var _footKey = (editorBrand && !editorSelectMode && !(editorSection === "modes" && editorModeId))
+    ? (editorSection + "|" + editorBrand + "|" + editorListKind) : null;
+  var _keepFooter = !!(_footKey && footer._key === _footKey && footer.children && footer.children.length);
   var ub = document.getElementById("editUndoBtn");
   if (ub) {
     var un = (state.editUndo || []).length;
@@ -4610,7 +4526,7 @@ function renderEditor() {
     ub.title = un ? ("Undo: " + state.editUndo[un - 1].label) : "";
   }
   content.innerHTML = "";
-  footer.style.display = "none";
+  if (!_keepFooter) { footer.style.display = "none"; footer._key = null; }
 
   // Mode (schedule) detail view
   if (editorSection === "modes" && editorModeId) {
@@ -5147,8 +5063,10 @@ function renderEditor() {
   }
 
   // ---------- Fixed footer ----------
+  if (_keepFooter) { footer.style.display = "block"; return; }   // leave the typing box alone
   footer.style.display = "block";
   footer.innerHTML = "";
+  footer._key = _footKey;          // null in select mode, so that footer always refreshes its counts
 
   if (editorSelectMode) {
     var n = Object.keys(editorSelected).length;
