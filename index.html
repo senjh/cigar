@@ -248,6 +248,12 @@
   /* Multi-select */
   .sel-box { width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; }
   .sel-box.on { background: #3b82f6; border-color: #3b82f6; }
+  .quick-add-btn { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 13px 14px; margin-bottom: 12px; border-radius: 14px; border: 1px solid rgba(16,185,129,0.5); background: linear-gradient(135deg, rgba(16,185,129,0.22), rgba(59,130,246,0.16)); color: #a7f3d0; font-size: 15px; font-weight: 800; cursor: pointer; text-align: left; }
+  .quick-add-btn span { color: #a0aec0; font-size: 12px; font-weight: 500; }
+  .qa-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); margin-bottom: 6px; font-size: 13px; }
+  .qa-tag { font-size: 10px; font-weight: 800; border-radius: 6px; padding: 2px 6px; flex-shrink: 0; }
+  /* Carton tick box: a real-size touch target, not a 26px square */
+  .sel-box.carton-box { width: 36px; height: 36px; border-radius: 10px; font-size: 18px; cursor: pointer; }
   .edit-num-row.selected { border-color: rgba(59,130,246,0.6); background: rgba(59,130,246,0.10); }
   /* Family management + settings */
   .fam-group-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; margin: 16px 0 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; }
@@ -460,6 +466,21 @@
   </div>
 </div>
 
+<!-- Quick Add Modal -->
+<div id="quickAddModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:6000;justify-content:center;align-items:flex-start;padding-top:calc(5vh + env(safe-area-inset-top));">
+  <div style="background:#1e212b;border-radius:20px;padding:20px;width:92%;max-width:420px;border:1px solid rgba(255,255,255,0.1);max-height:88vh;display:flex;flex-direction:column;">
+    <div style="color:#fff;font-size:17px;font-weight:800;text-align:center;margin-bottom:4px;">&#128229; Quick Add</div>
+    <div id="quickAddHint" style="color:#a0aec0;font-size:12px;line-height:1.5;text-align:center;margin-bottom:10px;"></div>
+    <textarea id="quickAddField" rows="7" autocomplete="off" autocapitalize="words" spellcheck="false"
+      style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.25);border-radius:12px;padding:12px;font-size:15px;color:#fff;outline:none;box-sizing:border-box;margin-bottom:10px;font-family:ui-monospace,monospace;resize:vertical;"></textarea>
+    <div id="quickAddPreview" style="overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;max-height:32vh;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button id="quickAddCancel" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>
+      <button id="quickAddGo" style="flex:2;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;background:#10b981;color:#fff;">Add</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bulk Add Modal -->
 <div id="bulkModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:6000;justify-content:center;align-items:flex-start;padding-top:calc(8vh + env(safe-area-inset-top));">
   <div style="background:#1e212b;border-radius:20px;padding:24px;width:90%;max-width:360px;border:1px solid rgba(255,255,255,0.1);">
@@ -648,7 +669,7 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
-var BUILD = "2026-09-14 \u00b7 toggle-fix";   // shown on the login screen + Staff panel
+var BUILD = "2026-09-27 \u00b7 quick-add";   // shown on the login screen + Staff panel
 // ---- Multi-store -------------------------------------------------------------
 // Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
 // is already live stays exactly where it is. Additional stores are namespaced
@@ -1359,11 +1380,18 @@ function normalizeShared(st) {
   st.requireLogin = true;   // CRM style: an account is always required
 
   // Carton "done" checks: { cartonCat: { index: userName } }
+  // Carton checks are keyed by the carton's NUMBER, not its row position.
+  // Position keys made a tick jump to a different carton whenever the list was
+  // added to, reordered or trimmed. Old position keys (plain digits - a real
+  // phone number is never just digits) are migrated to the number at that row.
   if (!st.cartonDone || typeof st.cartonDone !== "object") st.cartonDone = {};
   Object.keys(st.cartonDone).forEach(function(c){
     if (st.cartonOrder.indexOf(c) === -1) { delete st.cartonDone[c]; return; }
-    var len = (st.cartonNums[c] || []).length, clean = {};
-    Object.keys(st.cartonDone[c] || {}).forEach(function(i){ var n = parseInt(i, 10); if (n >= 0 && n < len) clean[n] = st.cartonDone[c][i] || "\u2713"; });
+    var list = st.cartonNums[c] || [], clean = {}, src = st.cartonDone[c] || {};
+    Object.keys(src).forEach(function(k){
+      var val = /^\d+$/.test(k) ? list[parseInt(k, 10)] : k;   // legacy index -> number
+      if (val && list.indexOf(val) !== -1) clean[val] = src[k] || "\u2713";
+    });
     st.cartonDone[c] = clean;
   });
 
@@ -1469,7 +1497,7 @@ function encodeShared(st) {
     cartons: st.cartonOrder.map(function(n){
       var d = (st.cartonDone && st.cartonDone[n]) || {};
       return { name: n, upc: st.cartonUpcs[n] || "", nums: st.cartonNums[n] || [],
-               done: Object.keys(d).map(function(i){ return { i: parseInt(i, 10), u: d[i] }; }) };
+               done: Object.keys(d).map(function(v){ return { v: v, u: d[v] }; }) };
     })
   };
 }
@@ -1504,7 +1532,12 @@ function decodeShared(remote) {
       st.cartonNums[e.name] = toList(e.nums);
       if (e.upc) st.cartonUpcs[e.name] = e.upc;
       var dm = {};
-      toList(e.done).forEach(function(x){ if (x && typeof x.i === "number") dm[x.i] = x.u || "\u2713"; });
+      var cl = st.cartonNums[e.name];
+      toList(e.done).forEach(function(x){
+        if (!x) return;
+        if (x.v) dm[x.v] = x.u || "\u2713";                                   // current format
+        else if (typeof x.i === "number" && cl[x.i]) dm[cl[x.i]] = x.u || "\u2713";  // older builds
+      });
       st.cartonDone[e.name] = dm;
     });
     if (!st.order.length) { st.nums = null; st.upcs = null; st.order = null; }
@@ -2050,7 +2083,7 @@ var _lockedScrollY = 0;
 function anyOverlayOpen() {
   var ids = ["editPanel", "specialPanel", "historyPanel", "usersPanel", "loginScreen",
              "modalOverlay", "specialBarcodeModal", "inputModal", "bulkModal", "colorModal",
-             "familyPicker", "modePicker", "storePicker", "scanModal", "backupModal"];
+             "familyPicker", "modePicker", "storePicker", "scanModal", "backupModal", "quickAddModal"];
   for (var i = 0; i < ids.length; i++) {
     var el = document.getElementById(ids[i]);
     if (el && el.style.display && el.style.display !== "none") return true;
@@ -3163,10 +3196,10 @@ document.getElementById("historyClose").onclick = function(){ document.getElemen
 function cartonToggle(cat, idx, num) {
   mutateShared(function(st) {
     var arr = st.cartonNums[cat];
-    if (!arr || arr[idx] !== num) return false;
+    if (!arr || arr.indexOf(num) === -1) return false;
     if (!st.cartonDone[cat]) st.cartonDone[cat] = {};
-    if (st.cartonDone[cat][idx]) delete st.cartonDone[cat][idx];
-    else st.cartonDone[cat][idx] = currentUser || "\u2713";
+    if (st.cartonDone[cat][num]) delete st.cartonDone[cat][num];
+    else st.cartonDone[cat][num] = currentUser || "\u2713";
     return st;
   }, function(c){ if (c) buildCartonsPanel(); });
 }
@@ -3176,10 +3209,10 @@ function cartonToggle(cat, idx, num) {
 function cartonMarkDone(cat, idx, num) {
   mutateShared(function(st) {
     var arr = st.cartonNums[cat];
-    if (!arr || arr[idx] !== num) return false;
+    if (!arr || arr.indexOf(num) === -1) return false;
     if (!st.cartonDone[cat]) st.cartonDone[cat] = {};
-    if (st.cartonDone[cat][idx]) return false;   // already done - nothing to change
-    st.cartonDone[cat][idx] = currentUser || "\u2713";
+    if (st.cartonDone[cat][num]) return false;   // already done - nothing to change
+    st.cartonDone[cat][num] = currentUser || "\u2713";
     return st;
   }, function(c){ if (c) buildCartonsPanel(); });
 }
@@ -3198,16 +3231,11 @@ function buildCartonsPanel() {
   var totalAll = 0, doneAll = 0;
   CARTON_ORDER.forEach(function(c){ totalAll += (CARTONS[c] || []).length; doneAll += Object.keys(doneMap[c] || {}).length; });
 
+  // Summary only. "Clear checks" used to sit right under the Close button and
+  // got hit by accident - it now lives at the very bottom and needs a 2nd tap.
   var top = document.createElement("div");
-  top.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;";
-  top.innerHTML = "<div style='color:#a0aec0;font-size:13px;'>Tap the box to tick a carton as done \u00b7 <b style='color:#fff;'>" + doneAll + "/" + totalAll + "</b> done</div>";
-  var clr = document.createElement("button");
-  clr.className = "tool-btn";
-  clr.style.flex = "0 0 auto";
-  clr.textContent = "Clear checks";
-  clr.disabled = !doneAll;
-  clr.onclick = cartonClearChecks;
-  top.appendChild(clr);
+  top.style.cssText = "color:#a0aec0;font-size:13px;margin-bottom:12px;";
+  top.innerHTML = "Tap the box to tick a carton as done \u00b7 <b style='color:#fff;'>" + doneAll + "/" + totalAll + "</b> done";
   el.appendChild(top);
 
   CARTON_ORDER.forEach(function(cat) {
@@ -3230,12 +3258,12 @@ function buildCartonsPanel() {
     }
 
     nums.forEach(function(num, idx) {
-      var who = dm[idx];
+      var who = dm[num];
       var row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 10px;background:" + (who ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.05)") + ";border-radius:10px;margin-bottom:8px;border:1px solid " + (who ? "rgba(16,185,129,0.45)" : "rgba(255,255,255,0.07)") + ";";
 
       var box = document.createElement("div");
-      box.className = "sel-box" + (who ? " on" : "");
+      box.className = "sel-box carton-box" + (who ? " on" : "");
       box.style.borderColor = who ? "#10b981" : "rgba(255,255,255,0.3)";
       box.style.background = who ? "#10b981" : "";
       box.innerHTML = who ? "&#10003;" : "";
@@ -3258,6 +3286,27 @@ function buildCartonsPanel() {
 
     el.appendChild(section);
   });
+
+  if (doneAll) {
+    var armed = pendingDeleteKey === "CARTON-CLEAR";
+    var clr = document.createElement("button");
+    clr.className = "edit-danger-btn";
+    clr.style.marginTop = "8px";
+    clr.style.marginBottom = "24px";
+    if (armed) { clr.style.background = "#ef4444"; clr.style.color = "#fff"; clr.style.borderColor = "#ef4444"; }
+    clr.textContent = armed ? ("Tap again to clear all " + doneAll + " checks") : "Clear all checks";
+    clr.onclick = function() {
+      if (pendingDeleteKey === "CARTON-CLEAR") {
+        clearTimeout(pendingDeleteTimer); pendingDeleteKey = null; cartonClearChecks();
+      } else {
+        pendingDeleteKey = "CARTON-CLEAR";
+        clearTimeout(pendingDeleteTimer);
+        pendingDeleteTimer = setTimeout(function(){ pendingDeleteKey = null; buildCartonsPanel(); }, 5000);
+        buildCartonsPanel();
+      }
+    };
+    el.appendChild(clr);
+  }
 }
 
 function openCartonBarcode(cat, num) {
@@ -3978,8 +4027,11 @@ function catAdd(sec, rawName, family) {
   }, function(committed) {
     if (committed) {
       editorBrand = name;
+      editorListKind = "main";
       renderEditor();
       showToast("Category added");
+      // Next thing you'll want is its numbers - open the paste box right away.
+      openQuickAdd({ cat: name, sec: sec, kind: sec === "cartons" ? "cartons" : "main" }, sec);
     } else {
       showToast("That category already exists");
     }
@@ -4271,6 +4323,181 @@ function showCopySheet(title, text) {
   try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); showToast("Copied to clipboard", "ok"); } } catch(e) {}
 }
 
+// ---- Quick Add ---------------------------------------------------------------
+// One box for everything: type or paste a category name on its own line, then
+// its numbers underneath. Existing categories are matched by name, new ones are
+// created on the spot (family guessed from the name), duplicates are skipped.
+// "Name (weekend)" targets that category's weekend list. The format is the same
+// one "Copy all lists" produces, so lists copy out and paste back in unchanged.
+function qaPhone(piece) {
+  var p = String(piece || "").trim();
+  if (!p) return null;
+  if (/^scan$/i.test(p)) return ["SCAN"];
+  if (/[a-z]/i.test(p)) return null;
+  var d = p.replace(/\D/g, "");
+  if (d.length === 11 && d.charAt(0) === "1") d = d.slice(1);
+  if (d.length === 10) return [formatPhone(d)];
+  if (d.length > 10 && d.length % 10 === 0) {          // several typed with no separator
+    var out = [];
+    for (var i = 0; i < d.length; i += 10) out.push(formatPhone(d.slice(i, i + 10)));
+    return out;
+  }
+  return null;
+}
+function qaFindCat(name) {
+  var low = name.toLowerCase();
+  for (var i = 0; i < state.order.length; i++) if (state.order[i].toLowerCase() === low) return { cat: state.order[i], sec: "calls" };
+  for (var j = 0; j < state.cartonOrder.length; j++) if (state.cartonOrder[j].toLowerCase() === low) return { cat: state.cartonOrder[j], sec: "cartons" };
+  return null;
+}
+function qaGuessFamily(name) {
+  var low = name.toLowerCase(), best = null;
+  FAMILIES.forEach(function(f) {
+    if (f.name !== "Other" && low.indexOf(f.name.toLowerCase()) === 0 && (!best || f.name.length > best.length)) best = f.name;
+  });
+  if (best) return best;
+  var d = defaultFamilyOf(name);
+  return FAMILIES.some(function(f){ return f.name === d; }) ? d : "Other";
+}
+// def: { cat, sec, kind } when opened from inside a category (numbers with no
+// heading go there). newSec: where brand-new headings become categories.
+function quickParse(text, def, newSec) {
+  newSec = newSec || "calls";
+  var groups = [], byKey = {}, cur = null, unknown = [], orphans = 0, seen = {};
+  function target(name, kind, sec, isNew, family) {
+    var key = sec + "|" + kind + "|" + name.toLowerCase();
+    if (!byKey[key]) { byKey[key] = { cat: name, kind: kind, sec: sec, isNew: isNew, family: family, nums: [], dups: 0 }; groups.push(byKey[key]); }
+    return byKey[key];
+  }
+  if (def && def.cat) cur = target(def.cat, def.kind || "main", def.sec || "calls", false, null);
+  String(text || "").split(/\r?\n/).forEach(function(raw) {
+    var line = raw.trim();
+    if (!line) return;
+    var header = null, rest = line;
+    var ci = line.indexOf(":");
+    if (ci > 0 && /[a-z]/i.test(line.slice(0, ci))) { header = line.slice(0, ci); rest = line.slice(ci + 1); }
+    else if (/[a-z]/i.test(line) && !/^scan$/i.test(line)) { header = line; rest = ""; }
+    if (header !== null) {
+      var wk = /\(\s*weekend\s*\)\s*$/i.test(header);
+      var name = header.replace(/\(\s*weekend\s*\)\s*$/i, "").replace(/[.#$\[\]\/]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
+      if (name) {
+        var found = qaFindCat(name);
+        if (found) cur = target(found.cat, found.sec === "cartons" ? "cartons" : (wk ? "weekend" : "main"), found.sec, false, null);
+        else if (newSec === "cartons") cur = target(name, "cartons", "cartons", true, null);
+        else cur = target(name, wk ? "weekend" : "main", "calls", true, qaGuessFamily(name));
+      }
+    }
+    if (!rest.trim()) return;
+    rest.split(/[,;\t]+/).forEach(function(piece) {
+      var got = qaPhone(piece);
+      if (!got) { if (piece.trim()) unknown.push(piece.trim()); return; }
+      if (!cur) { orphans += got.length; return; }
+      got.forEach(function(n) {
+        if (n !== "SCAN" && (seen[n] || findNumberOwner(state, n))) { cur.dups++; return; }
+        if (n !== "SCAN") seen[n] = 1;
+        cur.nums.push(n);
+      });
+    });
+  });
+  var total = groups.reduce(function(a, g){ return a + g.nums.length; }, 0);
+  var created = groups.filter(function(g){ return g.isNew; }).length;
+  return { groups: groups, unknown: unknown, orphans: orphans, total: total, created: created };
+}
+
+function quickCommit(p) {
+  var groups = p.groups.filter(function(g){ return g.nums.length || g.isNew; });
+  if (!groups.length) { showToast("Nothing to add yet"); return; }
+  markUndo("Quick add");
+  var added = 0, made = 0, skipped = 0;
+  mutateShared(function(st) {
+    added = 0; made = 0; skipped = 0;           // a transaction may run more than once
+    var seen = {};
+    groups.forEach(function(g) {
+      var name = g.cat, sec = g.sec;
+      var order = sec === "cartons" ? st.cartonOrder : st.order;
+      var hit = order.filter(function(o){ return o.toLowerCase() === name.toLowerCase(); })[0];
+      if (hit) name = hit;
+      else if (g.isNew) {
+        order.push(name);
+        if (sec === "cartons") { st.cartonNums[name] = []; }
+        else {
+          st.nums[name] = []; st.wnums[name] = []; st.pos[name] = 0; st.wpos[name] = 0;
+          st.familyOf[name] = st.families.some(function(f){ return f.name === g.family; }) ? g.family : "Other";
+        }
+        made++;
+      } else return;
+      var arr = sec === "cartons" ? st.cartonNums[name] : (g.kind === "weekend" ? st.wnums[name] : st.nums[name]);
+      if (!arr) return;
+      g.nums.forEach(function(n) {
+        if (n !== "SCAN" && (seen[n] || findNumberOwner(st, n))) { skipped++; return; }
+        if (n !== "SCAN") seen[n] = 1;
+        arr.push(n); added++;
+      });
+    });
+    return (added || made) ? st : false;
+  }, function(c) {
+    renderEditor();
+    if (c) showToast("Added " + added + " number" + (added === 1 ? "" : "s") +
+      (made ? " \u00b7 " + made + " new categor" + (made === 1 ? "y" : "ies") : "") +
+      (skipped ? " \u00b7 " + skipped + " already on file" : ""), "ok");
+    else showToast("Nothing new \u2014 those are all already on file");
+  });
+}
+
+var _qaDef = null, _qaNewSec = "calls";
+function renderQuickPreview() {
+  var box = document.getElementById("quickAddPreview");
+  var go = document.getElementById("quickAddGo");
+  var p = quickParse(document.getElementById("quickAddField").value, _qaDef, _qaNewSec);
+  var html = "";
+  p.groups.forEach(function(g) {
+    if (!g.nums.length && !g.isNew && !g.dups) return;
+    var col = g.sec === "cartons" ? "#f59e0b" : (g.isNew ? colorOfFamily(g.family) : familyColor(g.cat));
+    html += "<div class='qa-row' style='border-left:3px solid " + col + ";'>" +
+      (g.isNew ? "<span class='qa-tag' style='background:rgba(16,185,129,0.2);color:#6ee7b7;'>NEW</span>" : "") +
+      "<span style='flex:1;min-width:0;color:#fff;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>" + escapeHtml(g.cat) + "</span>" +
+      (g.kind === "weekend" ? "<span class='qa-tag' style='background:rgba(168,85,247,0.2);color:#d8b4fe;'>WEEKEND</span>" : "") +
+      (g.sec === "cartons" ? "<span class='qa-tag' style='background:rgba(245,158,11,0.2);color:#fcd34d;'>CARTON</span>" : "") +
+      (g.isNew && g.sec === "calls" ? "<span class='qa-tag' style='background:" + rgbaStr(col, 0.2) + ";color:" + lightenHex(col, 0.4) + ";'>" + escapeHtml(g.family) + "</span>" : "") +
+      "<span style='color:#6ee7b7;font-weight:800;flex-shrink:0;'>+" + g.nums.length + "</span>" +
+      (g.dups ? "<span style='color:#94a3b8;font-size:11px;flex-shrink:0;'>" + g.dups + " dup</span>" : "") +
+      "</div>";
+  });
+  if (p.orphans) html += "<div style='color:#fca5a5;font-size:12px;margin:6px 2px;'>" + p.orphans + " number" + (p.orphans === 1 ? "" : "s") + " before any category name \u2014 put a category name on the line above them.</div>";
+  if (p.unknown.length) html += "<div style='color:#fca5a5;font-size:12px;margin:6px 2px;'>Couldn't read: " + escapeHtml(p.unknown.slice(0, 5).join(", ")) + (p.unknown.length > 5 ? "\u2026" : "") + "</div>";
+  if (!html) html = "<div style='color:#64748b;font-size:12px;text-align:center;padding:6px;'>Preview appears here as you type.</div>";
+  box.innerHTML = html;
+  var n = p.total, k = p.created;
+  go.disabled = !(n || k);
+  go.style.opacity = go.disabled ? "0.45" : "1";
+  go.textContent = !(n || k) ? "Add" : ("Add " + n + " number" + (n === 1 ? "" : "s") + (k ? " + " + k + " new" : ""));
+}
+
+function openQuickAdd(def, newSec) {
+  _qaDef = def || null;
+  _qaNewSec = newSec || (def && def.sec) || "calls";
+  var field = document.getElementById("quickAddField");
+  field.value = "";
+  var where = def ? ("Adding to <b style='color:#fff;'>" + escapeHtml(def.cat) + (def.kind === "weekend" ? " (weekend)" : "") + "</b>. ") : "";
+  document.getElementById("quickAddHint").innerHTML = where +
+    "Type a " + (_qaNewSec === "cartons" ? "carton " : "") + "category name on its own line, then its numbers underneath " +
+    "(any format, one per line or separated by commas). New categories are created for you; duplicates are skipped.";
+  field.placeholder = def
+    ? "662 111 2222\n(601) 555-1234\n7692223333"
+    : (_qaNewSec === "cartons" ? "Marlboro Gold Cartons\n662 111 2222\n601 555 1234" : "Pall Mall Red\n662 111 2222\n601-555-1234\n\nNewports Box\n769 222 3333\n\nGold (weekend)\n662 444 5555");
+  field.oninput = renderQuickPreview;
+  renderQuickPreview();
+  document.getElementById("quickAddModal").style.display = "flex";
+  setTimeout(function(){ try { field.focus(); } catch(e) {} }, 120);
+}
+document.getElementById("quickAddCancel").onclick = function(){ document.getElementById("quickAddModal").style.display = "none"; };
+document.getElementById("quickAddGo").onclick = function() {
+  var p = quickParse(document.getElementById("quickAddField").value, _qaDef, _qaNewSec);
+  if (!(p.total || p.created)) return;
+  document.getElementById("quickAddModal").style.display = "none";
+  quickCommit(p);
+};
+
 // -- Camera barcode scanner (html5-qrcode; HTTPS + user tap required) --
 var _scanner = null;
 function stopScanner() {
@@ -4411,6 +4638,12 @@ function renderEditor() {
     if (editorSection === "modes")    { renderModesTab(content); return; }
 
     var sec = editorSection;
+
+    var qaBtn = document.createElement("button");
+    qaBtn.className = "quick-add-btn";
+    qaBtn.innerHTML = "&#128229; Quick Add<span>Paste or type numbers \u2014 new " + (sec === "cartons" ? "carton " : "") + "categories are created automatically</span>";
+    qaBtn.onclick = function(){ openQuickAdd(null, sec); };
+    content.appendChild(qaBtn);
 
     if (sec === "calls") {
       var shufRow = document.createElement("div");
@@ -4998,11 +5231,16 @@ function renderEditor() {
     addBtn.style.flex = "1";
     addBtn.style.background = "#3b82f6";
     addBtn.style.color = "#fff";
+    // Several numbers pasted in at once? Add them all. Keep the keyboard up so
+    // the next number can be typed straight away.
+    function multi(v) { return /[\n,;]/.test(v) || v.replace(/\D/g, "").length > 11; }
     addBtn.onclick = function() {
       var v = addInput.value.trim();
       if (!v) return;
-      numAdd(sec2, brand, v, false);
+      if (multi(v)) numAddBulk(sec2, brand, v.replace(/\s{2,}/g, "\n"), false);
+      else numAdd(sec2, brand, v, false);
       addInput.value = "";
+      try { addInput.focus(); } catch(e) {}
     };
 
     var addRandBtn = document.createElement("button");
@@ -5013,8 +5251,10 @@ function renderEditor() {
     addRandBtn.onclick = function() {
       var v = addInput.value.trim();
       if (!v) return;
-      numAdd(sec2, brand, v, true);
+      if (multi(v)) numAddBulk(sec2, brand, v.replace(/\s{2,}/g, "\n"), true);
+      else numAdd(sec2, brand, v, true);
       addInput.value = "";
+      try { addInput.focus(); } catch(e) {}
     };
 
     addInput.onkeydown = function(e){ if (e.key === "Enter") addBtn.onclick(); };
