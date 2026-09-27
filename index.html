@@ -251,7 +251,6 @@
   .sync-dot.connected { background:#10b981; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/bwip-js@4/dist/bwip-js-min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
@@ -518,8 +517,12 @@
   <div style="background:#1e212b;border-radius:20px;padding:18px;width:92%;max-width:420px;border:1px solid rgba(255,255,255,0.1);">
     <div id="scanTitle" style="color:#fff;font-size:16px;font-weight:700;text-align:center;margin-bottom:6px;">Scan barcode</div>
     <div id="scanStatus" style="color:#a0aec0;font-size:12px;text-align:center;margin-bottom:10px;">Point the camera at the product's barcode</div>
-    <div id="scanRegion" style="width:100%;border-radius:12px;overflow:hidden;background:#000;min-height:220px;"></div>
-    <button id="scanCancel" style="width:100%;margin-top:12px;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>
+    <div id="scanRegion" style="position:relative;width:100%;border-radius:12px;overflow:hidden;background:#000;min-height:220px;"></div>
+    <div id="scanEngine" style="color:#64748b;font-size:10px;text-align:center;margin-top:6px;font-family:ui-monospace,monospace;"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button id="scanType" style="flex:1;border:1px solid rgba(59,130,246,0.45);border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;background:rgba(59,130,246,0.15);color:#93c5fd;">Type it instead</button>
+      <button id="scanCancel" style="flex:1;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -627,7 +630,7 @@ var DEFAULT_NUMS = {
 };
 
 var NUMS_VERSION = "v4";
-var BUILD = "2026-09-27 \u00b7 sync-fix-2";   // shown on the login screen + Staff panel
+var BUILD = "2026-09-27 \u00b7 scanner";   // shown on the login screen + Staff panel
 // ---- Multi-store -------------------------------------------------------------
 // Store "main" deliberately keeps the ORIGINAL Firebase paths so the data that
 // is already live stays exactly where it is. Additional stores are namespaced
@@ -4532,59 +4535,189 @@ document.getElementById("quickAddGo").onclick = function() {
   quickCommit(p);
 };
 
-// -- Camera barcode scanner (html5-qrcode; HTTPS + user tap required) --
-var _scanner = null;
-function stopScanner() {
-  var sc = _scanner; _scanner = null;
-  document.getElementById("scanModal").style.display = "none";
-  if (sc) { try { sc.stop().then(function(){ try { sc.clear(); } catch(e){} }).catch(function(){}); } catch(e) {} }
+// -- Camera barcode scanner --------------------------------------------------
+// html5-qrcode (the first engine used here) is widely reported to never read
+// UPC/EAN product barcodes on iPhones - the camera shows, nothing registers.
+// Engines are now tried in order of strength:
+//   1. the phone's own built-in detector (Android / Chrome)
+//   2. ZXing-C++ compiled to WebAssembly - strong on UPC/EAN, works on iPhone
+//   3. html5-qrcode, only as a last resort (e.g. if Lockdown Mode blocks #2)
+// Engines load on demand when Scan is tapped, not at app start.
+var SCAN_FORMATS = ["upc_a", "upc_e", "ean_13", "ean_8", "code_128", "itf", "qr_code"];
+var ZXING_URL  = "https://cdn.jsdelivr.net/npm/barcode-detector@3/dist/iife/ponyfill.min.js";
+var LEGACY_URL = "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js";
+var _scriptLoads = {};
+function loadScript(url) {
+  if (_scriptLoads[url]) return _scriptLoads[url];
+  _scriptLoads[url] = new Promise(function(resolve, reject) {
+    var el = document.createElement("script");
+    el.src = url; el.async = true;
+    el.onload = function(){ resolve(); };
+    el.onerror = function(){ delete _scriptLoads[url]; reject(new Error("couldn't download the scanner")); };
+    (document.head || document.body).appendChild(el);
+  });
+  return _scriptLoads[url];
 }
+
+function pickDetector() {
+  var native = Promise.resolve(null);
+  if (window.BarcodeDetector && window.BarcodeDetector.getSupportedFormats) {
+    native = window.BarcodeDetector.getSupportedFormats().then(function(have) {
+      var use = SCAN_FORMATS.filter(function(f){ return have.indexOf(f) !== -1; });
+      if (use.indexOf("upc_a") === -1 && use.indexOf("ean_13") === -1) return null;
+      return { name: "built-in", d: new window.BarcodeDetector({ formats: use }) };
+    }).catch(function(){ return null; });
+  }
+  return native.then(function(n) {
+    if (n) return n;
+    return loadScript(ZXING_URL).then(function() {
+      var api = window.BarcodeDetectionAPI;
+      if (!api || !api.BarcodeDetector) throw new Error("scanner engine missing");
+      return { name: "zxing", d: new api.BarcodeDetector({ formats: SCAN_FORMATS }) };
+    });
+  });
+}
+
+// A UPC-A code read as EAN-13 gains a leading 0 - keep the 12-digit form the app stores.
+function normalizeScan(raw) {
+  var d = String(raw || "").replace(/\D/g, "");
+  if (d.length === 13 && d.charAt(0) === "0") d = d.slice(1);
+  return d || String(raw || "");
+}
+
+var _scan = null;
+function scanStatus(t) { var el = document.getElementById("scanStatus"); if (el) el.textContent = t; }
+function scanEngineLabel(t) { var el = document.getElementById("scanEngine"); if (el) el.textContent = t; }
+function stopStream(sc) {
+  if (!sc) return;
+  clearTimeout(sc.timer);
+  if (sc.stream) { try { sc.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e) {} sc.stream = null; }
+  if (sc.legacy) { var L = sc.legacy; sc.legacy = null; try { L.stop().then(function(){ try { L.clear(); } catch(e) {} }).catch(function(){}); } catch(e) {} }
+}
+function stopScanner() {
+  var sc = _scan; _scan = null;
+  if (sc) { sc.stopped = true; stopStream(sc); }
+  document.getElementById("scanModal").style.display = "none";
+  document.getElementById("scanRegion").innerHTML = "";
+}
+function scanFound(sc, raw) {
+  if (sc.stopped || sc.done) return;
+  sc.done = true;
+  var code = normalizeScan(raw);
+  scanStatus("Got it: " + code);
+  try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
+  var cb = sc.cb;
+  setTimeout(function(){ stopScanner(); cb(code); }, 200);
+}
+function cameraError(err) {
+  var msg = String(err && (err.message || err.name || err) || "");
+  scanStatus(/NotAllowed|Permission|denied/i.test(msg)
+    ? "Camera permission denied \u2014 allow it in Safari settings, or tap Type it instead"
+    : ("Camera problem: " + (msg || "unknown") + " \u2014 tap Type it instead"));
+}
+
 function openScanner(title, cb) {
-  if (typeof Html5Qrcode === "undefined") { showToast("Scanner not loaded - check your connection"); return; }
-  // Give a SPECIFIC reason instead of one generic message, so it's diagnosable
-  // from the phone alone without guessing.
   if (typeof window.isSecureContext !== "undefined" && !window.isSecureContext) {
     showToast("This page isn't loaded securely (needs https\u2014open the real link, not a preview)");
     return;
   }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast("No camera API here \u2014 check Private Browsing is off and Screen Time \u2192 Content & Privacy \u2192 Camera is allowed");
-    return;
-  }
+  stopScanner();
   var modal = document.getElementById("scanModal");
   document.getElementById("scanTitle").textContent = title || "Scan barcode";
-  document.getElementById("scanStatus").textContent = "Starting camera\u2026";
   document.getElementById("scanRegion").innerHTML = "";
+  scanStatus("Starting camera\u2026"); scanEngineLabel("");
   modal.style.display = "flex";
-  var fmts = [];
-  try {
-    var F = Html5QrcodeSupportedFormats;
-    fmts = [F.UPC_A, F.UPC_E, F.EAN_13, F.EAN_8, F.CODE_128, F.ITF, F.QR_CODE];
-  } catch(e) {}
-  var done = false;
-  var sc;
-  try {
-    sc = new Html5Qrcode("scanRegion", fmts.length ? { formatsToSupport: fmts } : undefined);
-  } catch(e) { showToast("Couldn't start scanner"); modal.style.display = "none"; return; }
-  _scanner = sc;
-  sc.start({ facingMode: "environment" },
-    { fps: 10, qrbox: function(w, h){ return { width: Math.round(w * 0.85), height: Math.round(Math.min(h * 0.5, 180)) }; }, aspectRatio: 1.333 },
-    function(text) {
-      if (done) return; done = true;
-      var digits = String(text || "").replace(/\D/g, "");
-      document.getElementById("scanStatus").textContent = "Got it: " + (digits || text);
-      try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
-      setTimeout(function(){ stopScanner(); cb(digits || text); }, 250);
-    },
-    function(){ /* per-frame miss - ignore */ }
-  ).then(function(){
-    document.getElementById("scanStatus").textContent = "Point the camera at the barcode - hold steady";
-  }).catch(function(err) {
-    var msg = String(err && (err.message || err) || "");
-    document.getElementById("scanStatus").textContent = /NotAllowed|Permission|denied/i.test(msg)
-      ? "Camera permission denied - allow it in Safari settings and try again"
-      : ("Camera error: " + (msg || "unknown"));
+  var sc = _scan = { cb: cb, stopped: false, done: false };
+  document.getElementById("scanType").onclick = function() {
+    stopScanner();
+    promptInput("Type the barcode number", "", function(v){ cb(normalizeScan(v)); });
+  };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    scanStatus("No camera access here \u2014 check Private Browsing is off, or tap Type it instead");
+    return;
+  }
+  pickDetector().then(function(eng) {
+    if (sc.stopped) return;
+    runCameraLoop(sc, eng);
+  }).catch(function() {
+    if (sc.stopped) return;
+    startLegacyScanner(sc);                     // main engine unavailable
   });
+}
+
+function runCameraLoop(sc, eng) {
+  scanEngineLabel(eng.name === "built-in" ? "engine: built-in" : "engine: zxing");
+  navigator.mediaDevices.getUserMedia({ audio: false, video: {
+    facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+  .then(function(stream) {
+    if (sc.stopped) { stream.getTracks().forEach(function(t){ t.stop(); }); return; }
+    sc.stream = stream;
+    var region = document.getElementById("scanRegion");
+    region.innerHTML = "";
+    var v = document.createElement("video");
+    v.setAttribute("playsinline", ""); v.setAttribute("muted", ""); v.setAttribute("autoplay", "");
+    v.muted = true; v.playsInline = true; v.autoplay = true;
+    v.style.cssText = "width:100%;display:block;";
+    v.srcObject = stream;
+    region.appendChild(v);
+    var guide = document.createElement("div");      // where to hold the barcode
+    guide.style.cssText = "position:absolute;left:6%;right:6%;top:25%;bottom:25%;border:2px solid rgba(16,185,129,0.9);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,0.35);pointer-events:none;";
+    region.appendChild(guide);
+    try { var pl = v.play(); if (pl && pl.catch) pl.catch(function(){}); } catch(e) {}
+    scanStatus("Hold the barcode inside the green box");
+
+    var canvas = document.createElement("canvas");
+    var ctx = canvas.getContext && canvas.getContext("2d");
+    var started = Date.now(), failures = 0;
+    function next() {
+      if (sc.stopped || sc.done) return;
+      if (!sc.hinted && Date.now() - started > 9000) {
+        sc.hinted = true;
+        scanStatus("Not reading? Fill the box with the barcode, tilt away from glare, hold steady \u2014 or tap Type it instead");
+      }
+      sc.timer = setTimeout(tick, 120);
+    }
+    function tick() {
+      if (sc.stopped || sc.done) return;
+      if (!(v.readyState >= 2 && v.videoWidth && ctx)) return next();
+      // Decode the middle band (where the green box is), sharp but not oversized.
+      var vw = v.videoWidth, vh = v.videoHeight, bandH = Math.round(vh * 0.6), sy = Math.round((vh - bandH) / 2);
+      var k = Math.min(1, 1280 / vw);
+      canvas.width = Math.max(1, Math.round(vw * k)); canvas.height = Math.max(1, Math.round(bandH * k));
+      try { ctx.drawImage(v, 0, sy, vw, bandH, 0, 0, canvas.width, canvas.height); } catch(e) { return next(); }
+      eng.d.detect(canvas).then(function(res) {
+        if (sc.stopped || sc.done) return;
+        var hit = (res || []).filter(function(r){ return r && r.rawValue; })[0];
+        if (hit) return scanFound(sc, hit.rawValue);
+        next();
+      }, function() {
+        if (sc.stopped || sc.done) return;
+        if (++failures >= 3) { stopStream(sc); startLegacyScanner(sc); return; }   // engine can't run here
+        next();
+      });
+    }
+    next();
+  }).catch(cameraError);
+}
+
+function startLegacyScanner(sc) {
+  scanEngineLabel("engine: backup (the main scanner isn't available here \u2014 Lockdown Mode can cause this)");
+  scanStatus("Starting camera\u2026");
+  loadScript(LEGACY_URL).then(function() {
+    if (sc.stopped) return;
+    if (typeof Html5Qrcode === "undefined") throw new Error("scanner didn't load");
+    document.getElementById("scanRegion").innerHTML = "";
+    var fmts = [];
+    try { var F = Html5QrcodeSupportedFormats; fmts = [F.UPC_A, F.UPC_E, F.EAN_13, F.EAN_8, F.CODE_128, F.ITF, F.QR_CODE]; } catch(e) {}
+    var L = new Html5Qrcode("scanRegion", fmts.length ? { formatsToSupport: fmts } : undefined);
+    sc.legacy = L;
+    return L.start({ facingMode: "environment" },
+      { fps: 12, qrbox: function(w, h){ return { width: Math.round(w * 0.9), height: Math.round(Math.min(h * 0.55, 200)) }; },
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+      function(text){ scanFound(sc, text); },
+      function(){ /* per-frame miss */ })
+    .then(function(){ if (!sc.stopped) scanStatus("Hold the barcode steady inside the box"); });
+  }).catch(function(err){ if (!sc.stopped) cameraError(err); });
 }
 document.getElementById("scanCancel").onclick = stopScanner;
 document.getElementById("scanModal").onclick = function(e){ if (e.target === this) stopScanner(); };
